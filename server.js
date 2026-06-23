@@ -60,8 +60,7 @@ app.post('/api/register', (req, res) => {
         return res.json({ success: false, error: 'كلمة المرور لازم 6 أحرف على الأقل' });
     }
     
-    // التعديل هنا: تم تحويل الـ ID إلى أرقام فقط (بدون علامة #) لتجنب مشاكل المتصفحات أثناء البحث
-    const id = String(Math.floor(10000 + Math.random() * 90000));
+    const id = '#' + Math.floor(10000 + Math.random() * 90000);
     
     users[username] = {
         name: name,
@@ -176,54 +175,76 @@ app.post('/api/update-profile', (req, res) => {
     res.json({ success: true });
 });
 
-// ====== Socket.io ======
-const connectedUsers = {};
+// ====== [تعديل كامل هنا] Socket.io ======
+const connectedUsers = {}; // بنخزن فيها الـ socket.id مفتاحها هو الـ ID الفريد للمستخدم (مثل #12345)
 
 io.on('connection', (socket) => {
-    socket.on('login', (username) => {
-        connectedUsers[username] = socket.id;
-        if (users[username]) {
-            users[username].online = true;
-            save();
-        }
-        socket.username = username;
-    });
     
-    socket.on('send-message', (data) => {
-        const { to, message } = data;
+    // 1. عند دخول المستخدم للتطبيق يتم ربط الـ ID بتاعه بالـ socket.id الحالي
+    socket.on('join', (userId) => {
+        socket.userId = userId;
+        connectedUsers[userId] = socket.id;
         
-        let target = null;
+        // تحديث حالة المستخدم في قاعدة البيانات إلى "متصل"
         for (let u in users) {
-            if (users[u].name === to || users[u].id === to) {
-                target = u;
+            if (users[u].id === userId) {
+                users[u].online = true;
+                save();
                 break;
             }
         }
+    });
+    
+    // 2. استقبال الرسالة وتوجيهها للمستلم الحقيقي
+    socket.on('send-message', (data) => {
+        const { toId, message, fromId, fromName } = data;
         
-        if (target && connectedUsers[target]) {
-            io.to(connectedUsers[target]).emit('new-message', {
-                from: socket.username,
-                message: message,
-                time: new Date().toLocaleTimeString('ar-EG')
+        // البحث عن الـ socket.id الخاص بالشخص المستلم
+        const targetSocketId = connectedUsers[toId];
+        
+        // زيادة عدد الرسائل المرسلة للمستخدم في قاعدة البيانات (اختياري للإحصائيات)
+        for (let u in users) {
+            if (users[u].id === fromId) {
+                users[u].messages = (users[u].messages || 0) + 1;
+                save();
+                break;
+            }
+        }
+
+        // لو الشخص المستلم فاتح التطبيق حالياً، نرسل له الرسالة فوراً
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('receive-message', {
+                fromId: fromId,
+                fromName: fromName,
+                message: message
             });
         }
     });
     
+    // 3. عند خروج المستخدم أو قفل الصفحة
     socket.on('disconnect', () => {
-        if (socket.username && users[socket.username]) {
-            users[socket.username].online = false;
-            save();
+        if (socket.userId) {
+            // تحديث حالته في الـ JSON ليكون غير متصل
+            for (let u in users) {
+                if (users[u].id === socket.userId) {
+                    users[u].online = false;
+                    save();
+                    break;
+                }
+            }
+            // حذف جلسة الاتصال
+            delete connectedUsers[socket.userId];
         }
-        delete connectedUsers[socket.username];
     });
 });
 
 // ====== تشغيل ======
-const PORT = process.env.PORT || 8000;
-server.listen(PORT, () => {
+const PORT = process.env.PORT || 3000;
+server.listen(PORT,'0.0.0.0' () => {
     console.log('╔════════════════════════════╗');
     console.log('║        🚀 Revery           ║');
     console.log('║  http://localhost:' + PORT + '    ║');
-    console.log('║  http://0.0.0.0:' + PORT + '      ║');
+    console.log('║  http://0.0.0.0:' + PORT + '      ║'); 
     console.log('╚════════════════════════════╝');
 });
+

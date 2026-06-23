@@ -4,6 +4,7 @@
   <title>Revery</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- استدعاء ملف الـ client الخاص بـ socket.io من السيرفر -->
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -937,6 +938,24 @@
     let selectedBg = '#0a0a0a';
     let selectedNeon = '#00ff41';
     let searchResultUser = null;
+
+    // === [تعديل] الاستماع للرسائل الحقيقية القادمة من السيرفر ===
+    socket.on('receive-message', (data) => {
+      // إذا كانت المحادثة مفتوحة حاليًا مع نفس الشخص الذي أرسل الرسالة
+      if (activeChat && activeChat.user.id === data.fromId) {
+        let time = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'});
+        
+        let reply = document.createElement('div');
+        reply.className = 'message received';
+        reply.innerHTML = `${data.message}<div class="message-time">${time}</div>`;
+        
+        document.getElementById('messages').appendChild(reply);
+        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+      } else {
+        // إشعار علوي إذا جاءت رسالة من مستخدم آخر
+        showNotification(`📩 رسالة جديدة من ${data.fromName}`);
+      }
+    });
     
     // ====== تسجيل الدخول ======
     function showLogin() {
@@ -1017,12 +1036,18 @@
       }
     }
     
+    // === [تعديل] تفعيل الـ App وتوثيق اتصال السوكت ===
     function showApp() {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('registerScreen').style.display = 'none';
       document.getElementById('app').classList.add('active');
       loadUserData();
       loadChats();
+      
+      // إرسال الـ ID الخاص بنا للسيرفر لحفظ جلسة الاتصال باسمنا
+      if(currentUser && currentUser.id) {
+         socket.emit('join', currentUser.id);
+      }
     }
     
     // ====== تحميل بيانات المستخدم ======
@@ -1115,7 +1140,7 @@
       `;
     }
     
-    // ====== إرسال رسالة ======
+    // === [تعديل] إرسال رسالة حقيقية وحذف التلقائية ===
     function sendMessage() {
       let input = document.getElementById('messageInput');
       let text = input.value.trim();
@@ -1133,18 +1158,15 @@
         input.value = '';
         document.getElementById('emojiPanel').classList.remove('active');
         
+        // إرسال البيانات بشكل صحيح للسيرفر معتمداً على الـ ID
         socket.emit('send-message', {
-          to: activeChat.user.name,
-          message: text
+          toId: activeChat.user.id,
+          message: text,
+          fromId: currentUser.id,
+          fromName: currentUser.name
         });
         
-        setTimeout(() => {
-          let reply = document.createElement('div');
-          reply.className = 'message received';
-          reply.innerHTML = `تمام 👍<div class="message-time">${new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'})}</div>`;
-          document.getElementById('messages').appendChild(reply);
-          document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-        }, 1500);
+        // تم حذف كود الـ setTimeout الوهمي بنجاح!
       }
     }
     
