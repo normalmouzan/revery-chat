@@ -224,6 +224,6 @@ server.listen(PORT, () => {
     console.log('╔════════════════════════════╗');
     console.log('║        🚀 Revery           ║');
     console.log('║  http://localhost:' + PORT + '    ║');
+    console.log('║  http://0.0.0.0:' + PORT + '      ║');
     console.log('╚════════════════════════════╝');
 });
-
