@@ -60,7 +60,8 @@ app.post('/api/register', (req, res) => {
         return res.json({ success: false, error: 'كلمة المرور لازم 6 أحرف على الأقل' });
     }
     
-    const id = '#' + Math.floor(10000 + Math.random() * 90000);
+    // التعديل هنا: تم تحويل الـ ID إلى أرقام فقط (بدون علامة #) لتجنب مشاكل المتصفحات أثناء البحث
+    const id = String(Math.floor(10000 + Math.random() * 90000));
     
     users[username] = {
         name: name,
@@ -219,13 +220,10 @@ io.on('connection', (socket) => {
 
 // ====== تشغيل ======
 const PORT = process.env.PORT || 3000;
-server.listen(PORT,'0.0.0.0', () => {
-    
+server.listen(PORT, () => {
     console.log('╔════════════════════════════╗');
     console.log('║        🚀 Revery           ║');
     console.log('║  http://localhost:' + PORT + '    ║');
-    console.log('║  http://0.0.0.0:' + PORT + '      ║');
     console.log('╚════════════════════════════╝');
 });
-
 
