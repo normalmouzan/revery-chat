@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <title>Revery</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    /* ====== شاشات التسجيل ====== */
+    .auth-screen {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+    }
+    
+    .auth-box {
+      background: #111;
+      border: 2px solid #00ff41;
+      border-radius: 20px;
+      padding: 40px;
+      width: 400px;
+      box-shadow: 0 0 40px rgba(0, 255, 65, 0.2);
+    }
+    
+    .auth-box h2 {
+      color: #00ff41;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 28px;
+    }
+    
+    .auth-box input {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 15px;
+      border: 1px solid #333;
+      border-radius: 10px;
+      background: #000;
+      color: #fff;
+      font-size: 16px;
+      outline: none;
+      transition: 0.3s;
+    }
+    
+    .auth-box input:focus {
+      border-color: #00ff41;
+      box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+    }
+    
+    .auth-box button {
+      width: 100%;
+      padding: 14px;
+      background: #00ff41;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      transition: 0.3s;
+      margin-bottom: 10px;
+    }
+    
+    .auth-box button:hover {
+      transform: scale(1.02);
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+    }
+    
+    .auth-toggle {
+      text-align: center;
+      color: #888;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+    
+    .auth-toggle span {
+      color: #00ff41;
+      text-decoration: underline;
+    }
+    
+    .error-msg {
+      color: #e74c3c;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 14px;
+      display: none;
+    }
+    
+    /* ====== التطبيق ====== */
+    .app {
+      display: none;
+      height: 100vh;
+    }
+    
+    .app.active {
+      display: flex;
+    }
+    
+    /* ====== Sidebar ====== */
+    .sidebar {
+      width: 350px;
+      background: #111;
+      border-left: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sidebar-header {
+      padding: 20px;
+      background: #00ff41;
+      color: #000;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .user-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: 3px solid #000;
+      object-fit: cover;
+      cursor: pointer;
+    }
+    
+    .user-details h3 {
+      font-size: 18px;
+    }
+    
+    .user-id {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    
+    .tabs {
+      display: flex;
+      background: #1a1a1a;
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 15px;
+      text-align: center;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: 0.3s;
+      font-size: 14px;
+    }
+    
+    .tab:hover {
+      background: #222;
+    }
+    
+    .tab.active {
+      border-bottom-color: #00ff41;
+      color: #00ff41;
+      background: #1a2f1a;
+    }
+    
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    .chat-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 15px;
+      cursor: pointer;
+      border-bottom: 1px solid #222;
+      transition: 0.2s;
+    }
+    
+    .chat-item:hover {
+      background: #1a1a1a;
+    }
+    
+    .chat-item.active {
+      background: #1a2f1a;
+    }
+    
+    .chat-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #333;
+    }
+    
+    .chat-info {
+      flex: 1;
+      text-align: right;
+    }
+    
+    .chat-name {
+      font-weight: bold;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .chat-preview {
+      font-size: 13px;
+      color: #888;
+    }
+    
+    .chat-meta {
+      text-align: left;
+    }
+    
+    .chat-time {
+      font-size: 12px;
+      color: #666;
+    }
+    
+    .unread-badge {
+      background: #00ff41;
+      color: #000;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 5px;
+      display: inline-block;
+    }
+    
+    .settings-btn {
+      padding: 15px;
+      background: #1a1a1a;
+      border: none;
+      color: #00ff41;
+      cursor: pointer;
+      font-size: 16px;
+      border-top: 1px solid #222;
+      transition: 0.3s;
+    }
+    
+    .settings-btn:hover {
+      background: #222;
+    }
+    
+    /* ====== Chat Area ====== */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0a0a0a;
+    }
+    
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #444;
+    }
+    
+    .empty-state h2 {
+      margin-top: 20px;
+      font-size: 24px;
+    }
+    
+    .chat-header {
+      padding: 20px;
+      background: #111;
+      border-bottom: 1px solid #222;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .chat-header-info {
+      flex: 1;
+    }
+    
+    .chat-header-name {
+      font-weight: bold;
+      font-size: 18px;
+    }
+    
+    .chat-header-status {
+      font-size: 13px;
+      color: #00ff41;
+    }
+    
+    .chat-actions {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .chat-action-btn {
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      padding: 8px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    
+    .chat-action-btn:hover {
+      border-color: #e74c3c;
+      color: #e74c3c;
+    }
+    
+    .messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .message {
+      max-width: 60%;
+      padding: 12px 18px;
+      border-radius: 15px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    
+    .message.sent {
+      background: #00ff41;
+      color: #000;
+      align-self: flex-end;
+      border-bottom-left-radius: 5px;
+    }
+    
+    .message.received {
+      background: #333;
+      color: #fff;
+      align-self: flex-start;
+      border-bottom-right-radius: 5px;
+    }
+    
+    .message-time {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 5px;
+    }
+    
+    .input-area {
+      padding: 15px 20px;
+      background: #111;
+      border-top: 1px solid #222;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      position: relative;
+    }
+    
+    .input-area input {
+      flex: 1;
+      padding: 12px 20px;
+      border: 1px solid #333;
+      border-radius: 25px;
+      background: #000;
+      color: #fff;
+      outline: none;
+      font-size: 15px;
+    }
+    
+    .input-area input:focus {
+      border-color: #00ff41;
+    }
+    
+    .emoji-toggle {
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      padding: 10px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      transition: 0.3s;
+    }
+    
+    .emoji-toggle:hover {
+      border-color: #00ff41;
+      color: #00ff41;
+    }
+    
+    .send-btn {
+      padding: 12px 25px;
+      background: #00ff41;
+      color: #000;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+    
+    .send-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+    }
+    
+    .emoji-panel {
+      position: absolute;
+      bottom: 80px;
+      right: 20px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 15px;
+      padding: 15px;
+      display: none;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 5px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.5);
+      z-index: 100;
+    }
+    
+    .emoji-panel.active {
+      display: grid;
+    }
+    
+    .emoji-item {
+      background: transparent;
+      border: none;
+      color: #fff;
+      padding: 8px;
+      cursor: pointer;
+      font-size: 22px;
+      border-radius: 8px;
+      transition: 0.2s;
+    }
+    
+    .emoji-item:hover {
+      background: #00ff41;
+      transform: scale(1.2);
+    }
+    
+    /* ====== Modals ====== */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-box {
+      background: #111;
+      border: 2px solid #00ff41;
+      border-radius: 20px;
+      padding: 40px;
+      width: 450px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 0 40px rgba(0, 255, 65, 0.2);
+    }
+    
+    .modal-box h3 {
+      color: #00ff41;
+      margin-bottom: 25px;
+      text-align: center;
+      font-size: 24px;
+    }
+    
+    .setting-item {
+      margin-bottom: 20px;
+    }
+    
+    .setting-item label {
+      display: block;
+      margin-bottom: 8px;
+      color: #888;
+      font-size: 14px;
+    }
+    
+    .setting-item input, .setting-item select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #333;
+      border-radius: 10px;
+      background: #000;
+      color: #fff;
+      outline: none;
+    }
+    
+    .bg-options {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .bg-option {
+      height: 60px;
+      border-radius: 10px;
+      cursor: pointer;
+      border: 3px solid transparent;
+      transition: 0.3s;
+    }
+    
+    .bg-option:hover, .bg-option.selected {
+      border-color: #00ff41;
+      transform: scale(1.05);
+    }
+    
+    .modal-btn {
+      width: 100%;
+      padding: 12px;
+      background: #00ff41;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+    
+    .modal-btn.secondary {
+      background: #333;
+      color: #fff;
+    }
+    
+    .profile-avatar-large {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 4px solid #00ff41;
+      object-fit: cover;
+      display: block;
+      margin: 0 auto 20px;
+      cursor: pointer;
+      box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+    }
+    
+    .profile-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+      text-align: center;
+    }
+    
+    .stat {
+      background: #0a0a0a;
+      padding: 15px;
+      border-radius: 10px;
+    }
+    
+    .stat-value {
+      font-size: 24px;
+      color: #00ff41;
+      font-weight: bold;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    
+    .password-box {
+      background: #0a0a0a;
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+      border: 1px solid #333;
+    }
+    
+    .password-label {
+      color: #888;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .password-text {
+      color: #00ff41;
+      font-size: 20px;
+      letter-spacing: 3px;
+      font-family: monospace;
+    }
+    
+    .password-visible {
+      letter-spacing: normal !important;
+      font-family: 'Segoe UI', sans-serif !important;
+    }
+    
+    .search-result {
+      background: #0a0a0a;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 15px;
+      display: none;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .search-result.found {
+      display: flex;
+    }
+    
+    .notification {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: #111;
+      border: 2px solid #00ff41;
+      border-radius: 15px;
+      padding: 20px 30px;
+      box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+      display: none;
+      z-index: 9999;
+      animation: slideIn 0.3s ease;
+    }
+    
+    .notification.show {
+      display: block;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(-100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    .action-buttons {
+      padding: 10px 15px;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .action-btn {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      background: #00ff41;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    
+    .action-btn.secondary {
+      background: #333;
+      color: #fff;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #111;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #00ff41;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- إشعارات -->
+  <div class="notification" id="notification">
+    <span id="notifText">رسالة جديدة!</span>
+  </div>
+
+  <!-- شاشة تسجيل الدخول -->
+  <div class="auth-screen" id="loginScreen">
+    <div class="auth-box">
+      <h2>🔐 تسجيل الدخول</h2>
+      <div class="error-msg" id="loginError">بيانات غير صحيحة</div>
+      
+      <input type="text" id="loginUser" placeholder="اسم المستخدم">
+      <input type="password" id="loginPass" placeholder="كلمة المرور">
+      
+      <button onclick="login()">دخول</button>
+      <div class="auth-toggle">
+        ليس لديك حساب؟ <span onclick="showRegister()">سجل الآن</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- شاشة التسجيل -->
+  <div class="auth-screen" id="registerScreen" style="display: none;">
+    <div class="auth-box">
+      <h2>📝 إنشاء حساب</h2>
+      <div class="error-msg" id="regError">جميع الحقول مطلوبة</div>
+      
+      <input type="text" id="regUsername" placeholder="اسم المستخدم (بالإنجليزي)" maxlength="20">
+      <input type="text" id="regName" placeholder="اسمك اللي هيظهر" maxlength="20">
+      <input type="password" id="regPass" placeholder="كلمة المرور" minlength="6">
+      <input type="password" id="regPass2" placeholder="تأكيد كلمة المرور">
+      
+      <button onclick="register()">تسجيل</button>
+      <div class="auth-toggle">
+        لديك حساب؟ <span onclick="showLogin()">تسجيل الدخول</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة الإعدادات -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-box">
+      <h3>⚙️ الإعدادات</h3>
+      
+      <div class="setting-item">
+        <label>🖼️ تغيير البروفايل</label>
+        <input type="file" id="settingsAvatar" accept="image/*">
+      </div>
+      
+      <div class="setting-item">
+        <label>✏️ تغيير الاسم</label>
+        <input type="text" id="settingsName" placeholder="اسمك الجديد">
+      </div>
+      
+      <div class="setting-item">
+        <label>🎨 خلفية المحادثة</label>
+        <div class="bg-options">
+          <div class="bg-option" style="background: #0a0a0a;" onclick="selectBg('#0a0a0a')"></div>
+          <div class="bg-option" style="background: linear-gradient(135deg, #1a1a2e, #16213e);" onclick="selectBg('linear-gradient(135deg, #1a1a2e, #16213e)')"></div>
+          <div class="bg-option" style="background: linear-gradient(135deg, #0f0f23, #1a1a3e);" onclick="selectBg('linear-gradient(135deg, #0f0f23, #1a1a3e)')"></div>
+          <div class="bg-option" style="background: #1a1a1a;" onclick="selectBg('#1a1a1a')"></div>
+          <div class="bg-option" style="background: linear-gradient(45deg, #0a0a0a, #0f3460);" onclick="selectBg('linear-gradient(45deg, #0a0a0a, #0f3460)')"></div>
+          <div class="bg-option" style="background: #0d1117;" onclick="selectBg('#0d1117')"></div>
+          <div class="bg-option" style="background: linear-gradient(180deg, #000000, #1a1a2e);" onclick="selectBg('linear-gradient(180deg, #000000, #1a1a2e)')"></div>
+          <div class="bg-option" style="background: #111;" onclick="selectBg('#111')"></div>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label>🎨 لون النيون</label>
+        <select id="neonColor" onchange="changeNeonColor(this.value)">
+          <option value="#00ff41">أخضر</option>
+          <option value="#00d4ff">أزرق</option>
+          <option value="#ff006e">وردي</option>
+          <option value="#fb5607">برتقالي</option>
+          <option value="#8338ec">بنفسجي</option>
+          <option value="#ffbe0b">أصفر</option>
+        </select>
+      </div>
+      
+      <button class="modal-btn" onclick="saveSettings()">💾 حفظ</button>
+      <button class="modal-btn secondary" onclick="closeSettings()">إلغاء</button>
+    </div>
+  </div>
+
+  <!-- نافذة البروفايل -->
+  <div class="modal" id="profileModal">
+    <div class="modal-box">
+      <h3>👤 ملفي الشخصي</h3>
+      
+      <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="profile-avatar-large" id="profileLargeAvatar" onclick="document.getElementById('profileInput').click()">
+      <input type="file" id="profileInput" accept="image/*" style="display: none;" onchange="changeProfileImage(this)">
+      
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 id="profileName" style="color: #00ff41;">اسم المستخدم</h2>
+        <p id="profileUsername" style="color: #888; font-size: 14px; margin-top: 5px;">@username</p>
+        <p id="profileId" style="color: #666; font-size: 12px; margin-top: 5px;">ID: #00000</p>
+      </div>
+      
+      <!-- كلمة المرور -->
+      <div class="password-box">
+        <div class="password-label">🔐 كلمة المرور</div>
+        <div class="password-text" id="profilePassword">••••••</div>
+        <button class="modal-btn secondary" onclick="showPassword()" style="margin-top: 15px; width: auto; padding: 10px 30px; display: inline-block;">👁️ إظهار</button>
+      </div>
+      
+      <div class="profile-stats">
+        <div class="stat">
+          <div class="stat-value" id="statFriends">0</div>
+          <div class="stat-label">أصدقاء</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statGroups">0</div>
+          <div class="stat-label">جروبات</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statMsgs">0</div>
+          <div class="stat-label">رسائل</div>
+        </div>
+      </div>
+      
+      <button class="modal-btn" onclick="document.getElementById('profileInput').click()">🖼️ تغيير الصورة</button>
+      <button class="modal-btn secondary" onclick="closeProfile()">إغلاق</button>
+    </div>
+  </div>
+
+  <!-- نافذة إضافة صديق -->
+  <div class="modal" id="addFriendModal">
+    <div class="modal-box">
+      <h3>➕ إضافة صديق</h3>
+      <div class="setting-item">
+        <label>🔍 أدخل ID الصديق</label>
+        <input type="text" id="friendIdInput" placeholder="مثال: #12345">
+      </div>
+      <button class="modal-btn" onclick="searchFriend()">بحث</button>
+      
+      <div class="search-result" id="searchResult">
+        <img src="" class="chat-avatar" id="searchAvatar">
+        <div>
+          <div id="searchName" style="font-weight: bold;"></div>
+          <div id="searchId" style="font-size: 12px; color: #888;"></div>
+        </div>
+        <button class="modal-btn" style="width: auto; padding: 8px 20px;" onclick="addFriend()">➕ إضافة</button>
+      </div>
+      
+      <button class="modal-btn secondary" onclick="closeAddFriend()">إلغاء</button>
+    </div>
+  </div>
+
+  <!-- التطبيق الرئيسي -->
+  <div class="app" id="app">
+    
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="user-info">
+          <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="user-avatar" id="sidebarAvatar" onclick="openProfile()">
+          <div class="user-details">
+            <h3 id="sidebarName">زائر</h3>
+            <div class="user-id" id="sidebarId">ID: #00000</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('chats')">💬 محادثات</div>
+        <div class="tab" onclick="switchTab('groups')">👥 جروبات</div>
+      </div>
+      
+      <div class="action-buttons">
+        <button class="action-btn" onclick="openAddFriend()">➕ صديق</button>
+        <button class="action-btn secondary" onclick="createGroup()">👥 جروب</button>
+      </div>
+      
+      <div class="chat-list" id="chatList"></div>
+      
+      <button class="settings-btn" onclick="openSettings()">⚙️ الإعدادات</button>
+    </div>
+    
+    <!-- Chat Area -->
+    <div class="chat-area">
+      <div class="empty-state" id="emptyState">
+        <div style="font-size: 80px;">💬</div>
+        <h2>اختر محادثة للبدء</h2>
+        <p style="color: #666; margin-top: 10px;">أو أضف صديق جديد باستخدام ID</p>
+      </div>
+      
+      <div class="chat-header" id="chatHeader" style="display: none;">
+        <img src="" class="chat-avatar" id="activeChatAvatar">
+        <div class="chat-header-info">
+          <div class="chat-header-name" id="activeChatName">اسم المحادثة</div>
+          <div class="chat-header-status" id="activeChatStatus">متصل الآن</div>
+        </div>
+        <div class="chat-actions">
+          <button class="chat-action-btn" onclick="blockCurrentUser()">🚫 حظر</button>
+          <button class="chat-action-btn" onclick="reportCurrentUser()">🚨 إبلاغ</button>
+        </div>
+      </div>
+      
+      <div class="messages" id="messages" style="display: none;"></div>
+      
+      <div class="input-area" id="inputArea" style="display: none;">
+        <button class="emoji-toggle" onclick="toggleEmojiPanel()">😊</button>
+        <input type="text" id="messageInput" placeholder="اكتب رسالتك..." onkeypress="if(event.key==='Enter')sendMessage()">
+        <button class="send-btn" onclick="sendMessage()">📨</button>
+        
+        <div class="emoji-panel" id="emojiPanel">
+          <button class="emoji-item" onclick="insertEmoji('😀')">😀</button>
+          <button class="emoji-item" onclick="insertEmoji('😂')">😂</button>
+          <button class="emoji-item" onclick="insertEmoji('😍')">😍</button>
+          <button class="emoji-item" onclick="insertEmoji('🥰')">🥰</button>
+          <button class="emoji-item" onclick="insertEmoji('😎')">😎</button>
+          <button class="emoji-item" onclick="insertEmoji('🤔')">🤔</button>
+          <button class="emoji-item" onclick="insertEmoji('😢')">😢</button>
+          <button class="emoji-item" onclick="insertEmoji('😡')">😡</button>
+          <button class="emoji-item" onclick="insertEmoji('👍')">👍</button>
+          <button class="emoji-item" onclick="insertEmoji('👎')">👎</button>
+          <button class="emoji-item" onclick="insertEmoji('❤️')">❤️</button>
+          <button class="emoji-item" onclick="insertEmoji('🔥')">🔥</button>
+          <button class="emoji-item" onclick="insertEmoji('💯')">💯</button>
+          <button class="emoji-item" onclick="insertEmoji('🎉')">🎉</button>
+          <button class="emoji-item" onclick="insertEmoji('🙏')">🙏</button>
+          <button class="emoji-item" onclick="insertEmoji('💀')">💀</button>
+          <button class="emoji-item" onclick="insertEmoji('👑')">👑</button>
+          <button class="emoji-item" onclick="insertEmoji('🚀')">🚀</button>
+          <button class="emoji-item" onclick="insertEmoji('⚡')">⚡</button>
+          <button class="emoji-item" onclick="insertEmoji('🎯')">🎯</button>
+          <button class="emoji-item" onclick="insertEmoji('💎')">💎</button>
+          <button class="emoji-item" onclick="insertEmoji('🌟')">🌟</button>
+          <button class="emoji-item" onclick="insertEmoji('🌙')">🌙</button>
+          <button class="emoji-item" onclick="insertEmoji('☀️')">☀️</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== الاتصال بالسيرفر ======
+    const socket = io();
+    
+    let currentUser = null;
+    let currentUsername = null;
+    let activeChat = null;
+    let activeTab = 'chats';
+    let selectedBg = '#0a0a0a';
+    let selectedNeon = '#00ff41';
+    let searchResultUser = null;
+    
+    // ====== تسجيل الدخول ======
+    function showLogin() {
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('registerScreen').style.display = 'none';
+    }
+    
+    function showRegister() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('registerScreen').style.display = 'flex';
+    }
+    
+    async function login() {
+      let username = document.getElementById('loginUser').value.trim().toLowerCase();
+      let password = document.getElementById('loginPass').value;
+      
+      let res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      let data = await res.json();
+      
+      if (data.success) {
+        localStorage.setItem('revery_username', data.username);
+        localStorage.setItem('revery_password', password);
+        localStorage.setItem('revery_user', JSON.stringify(data.user));
+        
+        currentUser = data.user;
+        currentUsername = data.username;
+        showApp();
+      } else {
+        document.getElementById('loginError').textContent = data.error;
+        document.getElementById('loginError').style.display = 'block';
+      }
+    }
+    
+    // ====== التسجيل ======
+    async function register() {
+      let username = document.getElementById('regUsername').value.trim().toLowerCase();
+      let name = document.getElementById('regName').value.trim();
+      let pass = document.getElementById('regPass').value;
+      let pass2 = document.getElementById('regPass2').value;
+      
+      if (!username || !name || !pass) {
+        document.getElementById('regError').textContent = 'جميع الحقول مطلوبة';
+        document.getElementById('regError').style.display = 'block';
+        return;
+      }
+      
+      if (pass !== pass2) {
+        document.getElementById('regError').textContent = 'كلمتا المرور غير متطابقتين';
+        document.getElementById('regError').style.display = 'block';
+        return;
+      }
+      
+      let res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password: pass, name })
+      });
+      
+      let data = await res.json();
+      
+      if (data.success) {
+        localStorage.setItem('revery_username', username);
+        localStorage.setItem('revery_password', pass);
+        localStorage.setItem('revery_user', JSON.stringify(data.user));
+        
+        currentUser = data.user;
+        currentUsername = username;
+        showApp();
+        showNotification('✅ تم إنشاء الحساب! Username: @' + username);
+      } else {
+        document.getElementById('regError').textContent = data.error;
+        document.getElementById('regError').style.display = 'block';
+      }
+    }
+    
+    function showApp() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('registerScreen').style.display = 'none';
+      document.getElementById('app').classList.add('active');
+      loadUserData();
+      loadChats();
+    }
+    
+    // ====== تحميل بيانات المستخدم ======
+    function loadUserData() {
+      let saved = localStorage.getItem('revery_user');
+      let savedUsername = localStorage.getItem('revery_username');
+      
+      if (saved) {
+        currentUser = JSON.parse(saved);
+        currentUsername = savedUsername;
+        
+        document.getElementById('sidebarName').textContent = currentUser.name;
+        document.getElementById('sidebarId').textContent = 'ID: ' + currentUser.id;
+        document.getElementById('sidebarAvatar').src = currentUser.avatar;
+        
+        if (currentUser.bg) selectedBg = currentUser.bg;
+        if (currentUser.neon) selectedNeon = currentUser.neon;
+      }
+    }
+    
+    // ====== تبديل التبويبات ======
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      loadChats();
+    }
+    
+    // ====== تحميل المحادثات ======
+    function loadChats() {
+      let list = document.getElementById('chatList');
+      list.innerHTML = '';
+      
+      if (activeTab === 'chats') {
+        if (currentUser.friends && currentUser.friends.length > 0) {
+          currentUser.friends.forEach(friendId => {
+            fetch('/api/user/' + friendId)
+              .then(r => r.json())
+              .then(data => {
+                if (data.success) {
+                  list.innerHTML += createChatItem(data.user.name, data.user.avatar, data.user.id, 'private');
+                }
+              });
+          });
+        } else {
+          list.innerHTML = '<div style="padding: 30px; text-align: center; color: #666;">لا توجد محادثات<br>أضف صديق أولاً</div>';
+        }
+      } else {
+        list.innerHTML = '<div style="padding: 30px; text-align: center; color: #666;">قريباً...<br>ميزة الجروبات قيد التطوير</div>';
+      }
+    }
+    
+    function createChatItem(name, avatar, id, type) {
+      return `
+        <div class="chat-item" onclick="openChat('${id}', '${type}')">
+          <img src="${avatar}" class="chat-avatar">
+          <div class="chat-info">
+            <div class="chat-name">${name} <span style="font-size: 11px; color: #666;">${id}</span></div>
+            <div class="chat-preview">اضغط للمحادثة</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // ====== فتح محادثة ======
+    async function openChat(id, type) {
+      let res = await fetch('/api/user/' + id);
+      let data = await res.json();
+      
+      if (!data.success) return;
+      
+      let user = data.user;
+      activeChat = { id, type, user };
+      
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('chatHeader').style.display = 'flex';
+      document.getElementById('messages').style.display = 'flex';
+      document.getElementById('inputArea').style.display = 'flex';
+      
+      document.getElementById('activeChatAvatar').src = user.avatar;
+      document.getElementById('activeChatName').textContent = user.name;
+      document.getElementById('activeChatStatus').textContent = user.id;
+      
+      document.getElementById('messages').style.background = selectedBg;
+      document.getElementById('messages').innerHTML = `
+        <div class="message received">
+          مرحباً! أنا ${user.name}
+          <div class="message-time">الآن</div>
+        </div>
+      `;
+    }
+    
+    // ====== إرسال رسالة ======
+    function sendMessage() {
+      let input = document.getElementById('messageInput');
+      let text = input.value.trim();
+      
+      if (text && activeChat) {
+        let time = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'});
+        
+        let msgDiv = document.createElement('div');
+        msgDiv.className = 'message sent';
+        msgDiv.innerHTML = `${text}<div class="message-time">${time}</div>`;
+        
+        document.getElementById('messages').appendChild(msgDiv);
+        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        
+        input.value = '';
+        document.getElementById('emojiPanel').classList.remove('active');
+        
+        socket.emit('send-message', {
+          to: activeChat.user.name,
+          message: text
+        });
+        
+        setTimeout(() => {
+          let reply = document.createElement('div');
+          reply.className = 'message received';
+          reply.innerHTML = `تمام 👍<div class="message-time">${new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'})}</div>`;
+          document.getElementById('messages').appendChild(reply);
+          document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        }, 1500);
+      }
+    }
+    
+    // ====== الإيموجيات ======
+    function toggleEmojiPanel() {
+      document.getElementById('emojiPanel').classList.toggle('active');
+    }
+    
+    function insertEmoji(emoji) {
+      let input = document.getElementById('messageInput');
+      input.value += emoji;
+      input.focus();
+    }
+    
+    // ====== إضافة صديق ======
+    function openAddFriend() {
+      document.getElementById('addFriendModal').classList.add('active');
+      document.getElementById('friendIdInput').value = '';
+      document.getElementById('searchResult').classList.remove('found');
+    }
+    
+    function closeAddFriend() {
+      document.getElementById('addFriendModal').classList.remove('active');
+    }
+    
+    async function searchFriend() {
+      let id = document.getElementById('friendIdInput').value.trim();
+      
+      let res = await fetch('/api/user/' + id);
+      let data = await res.json();
+      
+      if (data.success) {
+        searchResultUser = data.user;
+        document.getElementById('searchAvatar').src = data.user.avatar;
+        document.getElementById('searchName').textContent = data.user.name;
+        document.getElementById('searchId').textContent = data.user.id;
+        document.getElementById('searchResult').classList.add('found');
+      } else {
+        alert('لم يتم العثور على مستخدم بهذا ID');
+      }
+    }
+    
+    async function addFriend() {
+      if (searchResultUser) {
+        let res = await fetch('/api/add-friend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ myUsername: currentUsername, friendId: searchResultUser.id })
+        });
+        
+        let data = await res.json();
+        
+        if (data.success) {
+          if (!currentUser.friends) currentUser.friends = [];
+          currentUser.friends.push(searchResultUser.id);
+          localStorage.setItem('revery_user', JSON.stringify(currentUser));
+          
+          loadChats();
+          closeAddFriend();
+          showNotification('✅ تمت إضافة ' + searchResultUser.name);
+        } else {
+          alert(data.error);
+        }
+      }
+    }
+    
+    // ====== إنشاء جروب ======
+    function createGroup() {
+      alert('🚧 ميزة الجروبات قيد التطوير');
+    }
+    
+    // ====== الحظر والإبلاغ ======
+    function blockCurrentUser() {
+      if (activeChat) {
+        if (confirm('هل تريد حظر ' + activeChat.user.name + '؟')) {
+          showNotification('🚫 تم الحظر');
+          closeChat();
+        }
+      }
+    }
+    
+    function reportCurrentUser() {
+      if (activeChat) {
+        let reason = prompt('سبب الإبلاغ عن ' + activeChat.user.name + ':');
+        if (reason) {
+          console.log('🚨 إبلاغ:', {
+            reported: activeChat.user.name,
+            reporter: currentUser.name,
+            reason: reason,
+            time: new Date().toISOString()
+          });
+          showNotification('🚨 تم إرسال الإبلاغ');
+        }
+      }
+    }
+    
+    function closeChat() {
+      document.getElementById('emptyState').style.display = 'flex';
+      document.getElementById('chatHeader').style.display = 'none';
+      document.getElementById('messages').style.display = 'none';
+      document.getElementById('inputArea').style.display = 'none';
+      activeChat = null;
+    }
+    
+    // ====== الإعدادات ======
+    function openSettings() {
+      document.getElementById('settingsName').value = currentUser.name;
+      document.getElementById('settingsModal').classList.add('active');
+    }
+    
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.remove('active');
+    }
+    
+    function selectBg(bg) {
+      selectedBg = bg;
+      document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('selected'));
+      event.target.classList.add('selected');
+    }
+    
+    function changeNeonColor(color) {
+      selectedNeon = color;
+    }
+    
+    async function saveSettings() {
+      let newName = document.getElementById('settingsName').value.trim();
+      
+      let res = await fetch('/api/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUsername, name: newName, bg: selectedBg, neon: selectedNeon })
+      });
+      
+      let data = await res.json();
+      
+      if (data.success) {
+        if (newName) currentUser.name = newName;
+        currentUser.bg = selectedBg;
+        currentUser.neon = selectedNeon;
+        localStorage.setItem('revery_user', JSON.stringify(currentUser));
+        
+        loadUserData();
+        closeSettings();
+        showNotification('✅ تم حفظ الإعدادات');
+      }
+    }
+    
+    // ====== البروفايل ======
+    function openProfile() {
+      let username = localStorage.getItem('revery_username') || 'غير معروف';
+      let password = localStorage.getItem('revery_password') || 'غير متوفر';
+      
+      document.getElementById('profileLargeAvatar').src = currentUser.avatar;
+      document.getElementById('profileName').textContent = currentUser.name;
+      document.getElementById('profileUsername').textContent = '@' + username;
+      document.getElementById('profileId').textContent = 'ID: ' + currentUser.id;
+      document.getElementById('profilePassword').textContent = '••••••';
+      document.getElementById('profilePassword').classList.remove('password-visible');
+      
+      document.getElementById('statFriends').textContent = currentUser.friends ? currentUser.friends.length : 0;
+      document.getElementById('statGroups').textContent = '0';
+      document.getElementById('statMsgs').textContent = '0';
+      
+      document.getElementById('profileModal').classList.add('active');
+    }
+    
+    function closeProfile() {
+      document.getElementById('profileModal').classList.remove('active');
+    }
+    
+    function showPassword() {
+      let pass = localStorage.getItem('revery_password') || 'غير متوفر';
+      let display = document.getElementById('profilePassword');
+      let btn = event.target;
+      
+      if (display.textContent === '••••••') {
+        display.textContent = pass;
+        display.classList.add('password-visible');
+        btn.textContent = '🙈 إخفاء';
+      } else {
+        display.textContent = '••••••';
+        display.classList.remove('password-visible');
+        btn.textContent = '👁️ إظهار';
+      }
+    }
+    
+    function changeProfileImage(input) {
+      if (input.files && input.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+          currentUser.avatar = e.target.result;
+          localStorage.setItem('revery_user', JSON.stringify(currentUser));
+          document.getElementById('profileLargeAvatar').src = e.target.result;
+          document.getElementById('sidebarAvatar').src = e.target.result;
+          showNotification('✅ تم تغيير الصورة');
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+    
+    // ====== إشعارات ======
+    function showNotification(text) {
+      let notif = document.getElementById('notification');
+      document.getElementById('notifText').textContent = text;
+      notif.classList.add('show');
+      setTimeout(() => notif.classList.remove('show'), 3000);
+    }
+    
+    // ====== إغلاق بالـ Escape ======
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeSettings();
+        closeProfile();
+        closeAddFriend();
+        document.getElementById('emojiPanel').classList.remove('active');
+      }
+    });
+    
+    // ====== إغلاق النوافذ بالخارج ======
+    document.querySelectorAll('.modal').forEach(modal => {
+      modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+          this.classList.remove('active');
+        }
+      });
+    });
+    
+    // ====== تسجيل دخول تلقائي ======
+    window.onload = function() {
+      let saved = localStorage.getItem('revery_user');
+      let savedUsername = localStorage.getItem('revery_username');
+      
+      if (saved && savedUsername) {
+        currentUser = JSON.parse(saved);
+        currentUsername = savedUsername;
+        showApp();
+      }
+    };
+  </script>
+
+</body>
+</html>
+
