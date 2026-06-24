@@ -1,7 +1,7 @@
 <!DOCTYPE html>  
 <html lang="ar" dir="rtl">  
 <head>  
-  <title>revery-app</title>  
+  <title>Revery-app</title>  
   <meta charset="UTF-8">  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">  
   <script src="/socket.io/socket.io.js"></script>  
@@ -47,11 +47,18 @@
     .group-settings-icon { font-size: 22px; cursor: pointer; color: #00ff41; display: none; padding: 5px; }  
     
     .messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 75px; }  
-    .message { max-width: 65%; padding: 12px 18px; border-radius: 18px; font-size: 15px; line-height: 1.4; word-break: break-word; }  
+    .message { max-width: 65%; padding: 12px 18px; border-radius: 18px; font-size: 15px; line-height: 1.4; word-break: break-word; position: relative; }  
     .message.sent { background: #00ff41; color: #000; align-self: flex-start; margin-right: auto; border-bottom-left-radius: 5px; }  
     .message.received { background: #1e1e1e; color: #fff; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 5px; border: 1px solid #333; }  
     .message-author { font-size: 11px; color: #00ff41; margin-bottom: 4px; font-weight: bold; }  
-    .message-time { font-size: 10px; opacity: 0.6; margin-top: 5px; text-align: left; }  
+    
+    /* تصميم الفوتر الخاص بكل رسالة ليشمل التيك والوقت معاً */
+    .message-footer { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 5px; font-size: 10px; opacity: 0.7; }  
+    .message.sent .message-footer { color: #000; }  
+    .message.received .message-footer { color: #888; }  
+    .msg-status { font-size: 12px; display: inline-block; font-weight: bold; }  
+    .msg-status.seen { color: #0055ff; } /* تيك زرقاء للرسائل المقروءة */
+
     .message img, .message video { max-width: 100%; border-radius: 10px; margin-top: 5px; display: block; }  
     .message audio { margin-top: 5px; width: 100%; max-width: 240px; }  
   
@@ -61,7 +68,7 @@
       
     .input-btn { background: transparent; border: none; color: #00ff41; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; transition: background 0.2s; }  
     .input-btn:hover { background: #1a2f1a; }  
-    .input-btn.recording { color: #ff3333; animation: pulse 1s infinite; }  
+    .input-btn.recording { color: #ff3333; animation: pulse 1s infinite; background: rgba(255,51,51,0.1); }  
     .send-btn { padding: 10px 20px; background: #00ff41; color: #000; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; font-size: 15px; }  
       
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); justify-content: center; align-items: center; z-index: 1000; }  
@@ -105,18 +112,16 @@
 <body>      
   <div class="notification" id="notification"><span id="notifText">رسالة جديدة!</span></div>      
     
-  <!-- شاشة الدخول -->  
   <div class="auth-screen" id="loginScreen">  
     <div class="auth-box">  
       <h2>🔐 تسجيل الدخول</h2>  
       <input type="text" id="loginUser" placeholder="اسم المستخدم أو الـ ID">  
-      <input type="password" id="loginPass" placeholder="كلمةrom">  
+      <input type="password" id="loginPass" placeholder="كلمة المرور">  
       <button onclick="login()">دخول</button>  
       <div class="auth-toggle">ليس لديك حساب؟ <span onclick="showRegister()">سجل الآن</span></div>  
     </div>  
   </div>      
   
-  <!-- شاشة التسجيل -->  
   <div class="auth-screen" id="registerScreen" style="display: none;">  
     <div class="auth-box">  
       <h2>📝 إنشاء حساب</h2>  
@@ -129,7 +134,6 @@
     </div>  
   </div>      
   
-  <!-- مودال إضافة صديق -->  
   <div class="modal" id="addFriendModal">  
     <div class="modal-box">  
       <h3>➕ إضافة صديق</h3>  
@@ -147,7 +151,6 @@
     </div>  
   </div>
 
-  <!-- مودال البحث عن مجموعة والانضمام إليها -->  
   <div class="modal" id="searchGroupModal">  
     <div class="modal-box">  
       <h3>🔍 البحث عن مجموعة</h3>  
@@ -165,7 +168,6 @@
     </div>  
   </div>      
   
-  <!-- مودال إنشاء مجموعة -->  
   <div class="modal" id="createGroupModal">  
     <div class="modal-box">  
       <h3>👥 إنشاء مجموعة جديدة</h3>  
@@ -183,7 +185,6 @@
     </div>  
   </div>
 
-  <!-- مودال إضافة عضو للجروب مباشرة بالـ ID -->  
   <div class="modal" id="addMemberToGroupModal">  
     <div class="modal-box">  
       <h3>➕ إضافة عضو للمجموعة</h3>  
@@ -196,7 +197,6 @@
     </div>  
   </div>      
   
-  <!-- مودال الإعدادات الشخصية للملف الشخصي -->  
   <div class="modal" id="settingsModal">  
     <div class="modal-box">  
       <h3>⚙️ الإعدادات الشخصية</h3>  
@@ -213,7 +213,6 @@
     </div>  
   </div>      
   
-  <!-- مودال إدارة وإعدادات الجروب -->  
   <div class="modal" id="groupSettingsModal">  
     <div class="modal-box">  
       <h3>⚙️ إدارة وإعدادات المجموعة</h3>  
@@ -228,7 +227,6 @@
         <div class="setting-item"><label>اسم المجموعة الجديد</label><input type="text" id="groupSettingsName"></div>  
         <div class="setting-item"><label>الوصف الجديد</label><input type="text" id="groupSettingsDesc"></div>  
         <button class="modal-btn" onclick="saveGroupSettings()">💾 حفظ تعديلات الجروب</button>  
-        <!-- زر إضافة عضو جديد المضاف داخل الإدارة -->  
         <button class="modal-btn" style="background:#00d1ff; color:#000;" onclick="openModal('addMemberToGroupModal')">➕ إضافة عضو بالـ ID</button>  
       </div>  
       <p id="groupNotAdminNotice" style="color: #888; text-align: center; display: none;">⚠️ تعديل البيانات وإضافة الأعضاء متاح للمالك والمشرفين فقط.</p>  
@@ -241,7 +239,6 @@
     </div>  
   </div>  
   
-  <!-- الهيكل الرئيسي للتطبيق -->  
   <div class="app" id="app">  
     <div class="sidebar">  
       <div class="sidebar-header">  
@@ -313,14 +310,30 @@
     socket.on('receive-message', (data) => {  
       if (activeChat && activeChat.id === data.toId && activeChat.type === data.type) {  
         let direction = (data.fromId === currentUser.id) ? 'sent' : 'received';  
-        appendMessage(data.fromName, data.message, direction, data.fileType);  
+        appendMessage(data.fromName, data.message, direction, data.fileType, data.id, data.status);  
+        
+        // بمجرد استقبال رسالة في الشات المفتوح حالياً، نبلغ السيرفر فوراً بقراءتها
+        if(direction === 'received') {
+          socket.emit('mark-as-seen', { readerId: currentUser.id, targetId: data.fromId, type: data.type });
+        }
       } else {  
         if (data.fromId !== currentUser.id) {  
           showNotification(`📩 رسالة جديدة من ${data.fromName}`);  
         }  
       }  
     });  
-      
+    
+    // استماع لتحديث حالة الرسالة الفردية (صح، صحين، صحين زرق)
+    socket.on('message-status-updated', (data) => {
+      let statusElem = document.getElementById(`status-${data.msgId}`);
+      if(statusElem) {
+        statusElem.className = `msg-status ${data.status}`;
+        if(data.status === 'sent') statusElem.textContent = '✓';
+        else if(data.status === 'delivered') statusElem.textContent = '✓✓';
+        else if(data.status === 'seen') statusElem.textContent = '✓✓';
+      }
+    });
+
     socket.on('group-updated', (data) => {  
       if (activeChat && activeChat.type === 'group' && activeChat.id === data.groupId) {  
          if (data.kickedId === currentUser.id) {  
@@ -440,13 +453,16 @@
       activeChat = { id, type: 'private', name, avatar, toId: id };  
       document.getElementById('groupSettingsBtn').style.display = 'none';  
       setupChatWindow(name, `المعرف: ${id}`, avatar);  
+      
+      // إخبار السيرفر بفتح الشات لقراءة الرسائل المتأخرة
+      socket.emit('mark-as-seen', { readerId: currentUser.id, targetId: id, type: 'private' });
         
       let res = await fetch(`/api/messages?fromId=${currentUser.id}&toId=${id}&type=private`);  
       let data = await res.json();  
       if(data.success) {  
         data.history.forEach(msg => {  
           let direction = (msg.fromId === currentUser.id) ? 'sent' : 'received';  
-          appendMessage(msg.fromName, msg.message, direction, msg.fileType);  
+          appendMessage(msg.fromName, msg.message, direction, msg.fileType, msg.id, msg.status);  
         });  
       }  
     }  
@@ -467,7 +483,7 @@
       if(data.success) {  
         data.history.forEach(msg => {  
           let direction = (msg.fromId === currentUser.id) ? 'sent' : 'received';  
-          appendMessage(msg.fromName, msg.message, direction, msg.fileType);  
+          appendMessage(msg.fromName, msg.message, direction, msg.fileType, msg.id, msg.status);  
         });  
       }  
     }  
@@ -606,15 +622,24 @@
         type: activeChat.type,  
         fileType: 'text'  
       };  
-      socket.emit('send-message', msgData);  
-      appendMessage(currentUser.name, text, 'sent', 'text');  
+      
+      // إرسال الرسالة والحصول على معرفها وحالتها الفورية من السيرفر لتحديث الواجهة بمؤشر الـ Ticks
+      socket.emit('send-message', msgData, (ack) => {
+         appendMessage(currentUser.name, text, 'sent', 'text', ack.msgId, ack.status);  
+      });
       input.value = '';  
     }  
     
-    function appendMessage(author, text, dir, fileType = 'text') {  
+    function appendMessage(author, text, dir, fileType = 'text', msgId = '', status = 'sent') {  
       let box = document.getElementById('messages');  
+      
+      // حماية لمنع تكرار حقن الرسالة في الـ DOM لو منشأة مسبقاً
+      if(msgId && document.getElementById(`msg-container-${msgId}`)) return;
+
       let msg = document.createElement('div');  
       msg.className = `message ${dir}`;  
+      if(msgId) msg.id = `msg-container-${msgId}`;
+
       let time = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});  
           
       let content = text;  
@@ -626,10 +651,20 @@
         content = `<audio src="${text}" controls></audio>`;  
       }  
     
+      // إعداد أيقونة علامة الصح (✓) بناءً على حالة الرسالة
+      let tick = '✓';
+      if(status === 'delivered') tick = '✓✓';
+      else if(status === 'seen') tick = '✓✓';
+
+      let footerHTML = `<div class="message-footer">
+                          <span>${time}</span>
+                          ${dir === 'sent' ? `<span id="status-${msgId}" class="msg-status ${status}">${tick}</span>` : ''}
+                        </div>`;
+
       if (activeChat.type === 'group' && dir === 'received') {  
-        msg.innerHTML = `<div class="message-author">${author}</div>${content}<div class="message-time">${time}</div>`;  
+        msg.innerHTML = `<div class="message-author">${author}</div>${content}${footerHTML}`;  
       } else {  
-        msg.innerHTML = `${content}<div class="message-time">${time}</div>`;  
+        msg.innerHTML = `${content}${footerHTML}`;  
       }  
       box.appendChild(msg);  
       box.scrollTop = box.scrollHeight;  
@@ -644,8 +679,10 @@
       reader.onload = function(e) {  
         let fType = file.type.startsWith('image/') ? 'image' : 'video';  
         let msgData = { toId: activeChat.toId, message: e.target.result, fromId: currentUser.id, fromName: currentUser.name, type: activeChat.type, fileType: fType };  
-        socket.emit('send-message', msgData);  
-        appendMessage(currentUser.name, e.target.result, 'sent', fType);  
+        
+        socket.emit('send-message', msgData, (ack) => {
+           appendMessage(currentUser.name, e.target.result, 'sent', fType, ack.msgId, ack.status);  
+        });  
       };  
       reader.readAsDataURL(file);  
       input.value = '';  
@@ -660,24 +697,46 @@
         return;  
       }  
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { return alert('متصفحك لا يدعم تسجيل الصوت'); }  
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  
-      audioChunks = [];  
-      mediaRecorder = new MediaRecorder(stream);  
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);  
-      mediaRecorder.onstop = () => {  
-        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });  
-        const reader = new FileReader();  
-        reader.onload = function(e) {  
-          let msgData = { toId: activeChat.toId, message: e.target.result, fromId: currentUser.id, fromName: currentUser.name, type: activeChat.type, fileType: 'audio' };  
-          socket.emit('send-message', msgData);  
-          appendMessage(currentUser.name, e.target.result, 'sent', 'audio');  
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  
+        audioChunks = [];  
+        
+        // تحديد الـ mimeType الأنسب والأكثر استقراراً في الموبايلات والكمبيوتر
+        let options = { mimeType: 'audio/webm' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'audio/ogg' };
+        }
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = {}; // ترك المتصفح يختار الصيغة التلقائية كخيار احتياطي كامل
+        }
+
+        mediaRecorder = new MediaRecorder(stream, options);  
+        mediaRecorder.ondataavailable = e => {
+           if (e.data && e.data.size > 0) audioChunks.push(e.data);
         };  
-        reader.readAsDataURL(audioBlob);  
-        stream.getTracks().forEach(track => track.stop());  
-      };  
-      mediaRecorder.start();  
-      btn.classList.add('recording');  
-      btn.innerText = '🛑';  
+        
+        mediaRecorder.onstop = () => {  
+          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });  
+          const reader = new FileReader();  
+          reader.onload = function(e) {  
+            let msgData = { toId: activeChat.toId, message: e.target.result, fromId: currentUser.id, fromName: currentUser.name, type: activeChat.type, fileType: 'audio' };  
+            
+            socket.emit('send-message', msgData, (ack) => {
+               appendMessage(currentUser.name, e.target.result, 'sent', 'audio', ack.msgId, ack.status);  
+            });  
+          };  
+          reader.readAsDataURL(audioBlob);  
+          stream.getTracks().forEach(track => track.stop());  
+        };  
+        
+        // تسجيل الصوت في دفعات بافر كل ثانية لضمان استقرار الفويس وعدم فقده بالموبايل
+        mediaRecorder.start(1000);  
+        btn.classList.add('recording');  
+        btn.innerText = '🛑';  
+      } catch(err) {
+         alert('خطأ في الوصول للميكروفون: ' + err.message);
+      }
     }  
     
     async function searchFriend() {  

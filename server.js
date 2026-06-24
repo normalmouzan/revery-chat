@@ -39,16 +39,15 @@ function rebuildIdCache() {
 }
 rebuildIdCache();
 
-// دالة توليد ID مستخدم (5 أرقام)
 function generateNumericId() {
     return Math.floor(10000 + Math.random() * 90000).toString();
 }
 
-// دالة توليد ID جروب مميز (7 أرقام) كما طلبت
 function generateGroup7DigitId() {
     return Math.floor(1000000 + Math.random() * 9000000).toString();
 }
 
+// مصفوفة حفظ الرسائل مؤقتاً (مضاف لها معرف فريد وحالة الرسالة)
 const messagesHistory = []; 
 
 // ==== واجهات برمجية التطبيق (APIs) ====
@@ -110,13 +109,12 @@ app.post('/api/update-profile', (req, res) => {
     res.json({ success: true, user });
 });
 
-// إنشاء الجروب بـ ID مكون من 7 أرقام
 app.post('/api/groups/create', (req, res) => {
     const { name, description, avatar, creatorId, creatorUsername } = req.body;
     const user = users[creatorUsername];
     if (!name || !user) return res.json({ success: false, error: "الاسم مطلوب" });
 
-    const groupId = generateGroup7DigitId(); // توليد المعرف الرقمي الجديد
+    const groupId = generateGroup7DigitId(); 
     const newGroup = {
         id: groupId, name, description: description || "لا يوجد وصف",
         avatar: avatar || "https://cdn-icons-png.flaticon.com/512/32/32441.png",
@@ -132,14 +130,12 @@ app.post('/api/groups/create', (req, res) => {
     res.json({ success: true, group: newGroup });
 });
 
-// البحث عن الجروب بالـ ID من القائمة الجانبية
 app.get('/api/groups/search/:groupId', (req, res) => {
     const group = groups[req.params.groupId];
     if (!group) return res.json({ success: false, error: "لم يتم العثور على مجموعة بهذا الرقم" });
     res.json({ success: true, group });
 });
 
-// انضمام مستخدم للجروب عبر محرك البحث
 app.post('/api/groups/join', (req, res) => {
     const { groupId, userId } = req.body;
     const group = groups[groupId];
@@ -153,7 +149,6 @@ app.post('/api/groups/join', (req, res) => {
     res.json({ success: true });
 });
 
-// إضافة عضو للجروب مباشرة بواسطة المشرف أو المالك عن طريق الـ ID
 app.post('/api/groups/add-member', (req, res) => {
     const { groupId, targetUserId, requestUserId } = req.body;
     const group = groups[groupId];
@@ -272,14 +267,46 @@ app.get('/api/messages', (req, res) => {
     res.json({ success: true, history });
 });
 
+// قائمة لحفظ السوكيتس المتصلة لمعرفة هل الـ User فاتح حالياً ونسهل الـ Delivery Tick
+const connectedUsers = {};
+
 io.on('connection', (socket) => {
-    socket.on('join', (userId) => { socket.join(userId); });
-    socket.on('send-message', (data) => {
+    let currentSocketUser = null;
+
+    socket.on('join', (userId) => { 
+        socket.join(userId); 
+        currentSocketUser = userId;
+        connectedUsers[userId] = socket.id;
+        
+        // عند دخول المستخدم، أي رسائل موجهة له في الخاص تتحول لـ دليفرد (صحين) لو كانت صح واحد
+        messagesHistory.forEach(msg => {
+            if(msg.type === 'private' && msg.toId === userId && msg.status === 'sent') {
+                msg.status = 'delivered';
+                socket.to(msg.fromId).emit('message-status-updated', { msgId: msg.id, status: 'delivered' });
+            }
+        });
+    });
+
+    socket.on('send-message', (data, callback) => {
+        const msgId = 'msg_' + Math.random().toString(36).substr(2, 9) + Date.now();
+        
+        // تحديد الحالة المبدئية: لو الطرف التاني متصل وسجل دخول نديها صحين فوراً، لو لا صح واحد
+        let initialStatus = 'sent';
+        if (data.type === 'private' && connectedUsers[data.toId]) {
+            initialStatus = 'delivered';
+        }
+
         const messageObject = {
+            id: msgId,
             fromId: data.fromId, fromName: data.fromName, toId: data.toId,
-            message: data.message, type: data.type, fileType: data.fileType || 'text', timestamp: new Date()
+            message: data.message, type: data.type, fileType: data.fileType || 'text', 
+            timestamp: new Date(), status: initialStatus
         };
+        
         messagesHistory.push(messageObject);
+
+        // إرجاع الـ ID والحالة للراسل فوراً لتحديث واجهته
+        if(callback) callback({ msgId, status: initialStatus });
 
         if (data.type === 'private') {
             socket.to(data.toId).emit('receive-message', messageObject);
@@ -290,6 +317,26 @@ io.on('connection', (socket) => {
                     if (memberId !== data.fromId) socket.to(memberId).emit('receive-message', messageObject);
                 });
             }
+        }
+    });
+
+    // حدث جديد: العميل يبلغ السيرفر إنه فتح شات وقرأ الرسائل بالفعل (صحين زرق)
+    socket.on('mark-as-seen', (data) => {
+        const { readerId, targetId, type } = data;
+        messagesHistory.forEach(msg => {
+            if (type === 'private') {
+                if (msg.type === 'private' && msg.fromId === targetId && msg.toId === readerId && msg.status !== 'seen') {
+                    msg.status = 'seen';
+                    socket.to(targetId).emit('message-status-updated', { msgId: msg.id, status: 'seen' });
+                }
+            }
+            // بالنسبة للجروبات، يمكن توسيعها لـ seen لكل مستخدم، لكن للتبسيط يتم تحديث الحالة محلياً للطرف الآخر عند القراءة
+        });
+    });
+
+    socket.on('disconnect', () => {
+        if(currentSocketUser && connectedUsers[currentSocketUser] === socket.id) {
+            delete connectedUsers[currentSocketUser];
         }
     });
 });
