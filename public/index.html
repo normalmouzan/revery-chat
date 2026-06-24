@@ -1,7 +1,7 @@
 <!DOCTYPE html>  
 <html lang="ar" dir="rtl">  
 <head>  
-  <title>revery-chat</title>  
+  <title>revery-app</title>  
   <meta charset="UTF-8">  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">  
   <script src="/socket.io/socket.io.js"></script>  
@@ -21,7 +21,6 @@
     .app { display: none; height: 100vh; width: 100vw; position: relative; }  
     .app.active { display: flex; }  
     
-    /* تعديل الـ Sidebar لضمان ثبات العناصر وتجاوبها على الهاتف */
     .sidebar { width: 350px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; height: 100vh; z-index: 5; }  
     .sidebar-header { padding: 20px; background: #00ff41; color: #000; flex-shrink: 0; }  
     .user-info { display: flex; align-items: center; gap: 12px; }  
@@ -38,7 +37,6 @@
     .chat-name { font-weight: bold; }  
     .chat-preview { font-size: 13px; color: #888; }  
     
-    /* تثبيت زر الإعدادات الشخصية أسفل الـ Sidebar دائماً */
     .settings-btn { padding: 15px; background: #1a1a1a; border: none; color: #00ff41; cursor: pointer; border-top: 1px solid #222; width: 100%; text-align: center; font-size: 15px; font-weight: bold; position: sticky; bottom: 0; flex-shrink: 0; }  
     
     .chat-area { flex: 1; display: flex; flex-direction: column; background: #050505; height: 100vh; position: relative; }  
@@ -74,7 +72,7 @@
     .setting-item label { display: block; margin-bottom: 5px; color: #888; font-size: 13px; }  
     .setting-item input[type="text"] { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 8px; background: #000; color: #fff; outline: none; }  
     .modal-btn { width: 100%; padding: 12px; background: #00ff41; color: #000; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; }  
-    .modal-btn.secondary { background: #333; color: #fff; }  
+    .modal-btn.secondary { background: #333; color: #fff; margin-top: 8px; }  
     .action-buttons { padding: 10px 15px; display: flex; gap: 10px; flex-shrink: 0; }  
     .action-btn { flex: 1; padding: 10px; font-size: 14px; background: #00ff41; color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }  
     .action-btn.secondary { background: #333; color: #fff; }  
@@ -107,16 +105,18 @@
 <body>      
   <div class="notification" id="notification"><span id="notifText">رسالة جديدة!</span></div>      
     
+  <!-- شاشة الدخول -->  
   <div class="auth-screen" id="loginScreen">  
     <div class="auth-box">  
       <h2>🔐 تسجيل الدخول</h2>  
       <input type="text" id="loginUser" placeholder="اسم المستخدم أو الـ ID">  
-      <input type="password" id="loginPass" placeholder="كلمة المرور">  
+      <input type="password" id="loginPass" placeholder="كلمةrom">  
       <button onclick="login()">دخول</button>  
       <div class="auth-toggle">ليس لديك حساب؟ <span onclick="showRegister()">سجل الآن</span></div>  
     </div>  
   </div>      
   
+  <!-- شاشة التسجيل -->  
   <div class="auth-screen" id="registerScreen" style="display: none;">  
     <div class="auth-box">  
       <h2>📝 إنشاء حساب</h2>  
@@ -129,11 +129,12 @@
     </div>  
   </div>      
   
+  <!-- مودال إضافة صديق -->  
   <div class="modal" id="addFriendModal">  
     <div class="modal-box">  
       <h3>➕ إضافة صديق</h3>  
       <div class="setting-item">  
-        <label>🔍 أدخل الـ ID (أرقام فقط)</label>  
+        <label>🔍 أدخل الـ ID الخاص بالمستخدم (أرقام فقط)</label>  
         <input type="text" id="friendIdInput" placeholder="مثال: 89122">  
       </div>  
       <button class="modal-btn" onclick="searchFriend()">🔍 بحث</button>  
@@ -144,8 +145,27 @@
       </div>  
       <button class="modal-btn secondary" onclick="closeModal('addFriendModal')">إلغاء</button>  
     </div>  
+  </div>
+
+  <!-- مودال البحث عن مجموعة والانضمام إليها -->  
+  <div class="modal" id="searchGroupModal">  
+    <div class="modal-box">  
+      <h3>🔍 البحث عن مجموعة</h3>  
+      <div class="setting-item">  
+        <label>أدخل معرف المجموعة المميز (7 أرقام)</label>  
+        <input type="text" id="groupIdSearchInput" placeholder="مثال: 1234567">  
+      </div>  
+      <button class="modal-btn" onclick="searchGroupById()">🔍 ابحث عن الجروب</button>  
+      <div id="groupSearchResult" style="display:none; align-items:center; gap:15px; margin:15px 0; background:#000; padding:10px; border-radius:8px;">  
+        <img id="searchGroupAvatar" src="" class="chat-avatar">  
+        <div style="flex:1;"><div id="searchGroupName" style="font-weight:bold;"></div><div id="searchGroupId" style="color:#888;font-size:12px;"></div></div>  
+        <button class="modal-btn" style="width:auto; padding:5px 15px; margin:0;" id="joinGroupBtn" onclick="joinSearchedGroup()">انضمام</button>  
+      </div>  
+      <button class="modal-btn secondary" onclick="closeModal('searchGroupModal')">إلغاء</button>  
+    </div>  
   </div>      
   
+  <!-- مودال إنشاء مجموعة -->  
   <div class="modal" id="createGroupModal">  
     <div class="modal-box">  
       <h3>👥 إنشاء مجموعة جديدة</h3>  
@@ -161,8 +181,22 @@
       <button class="modal-btn" onclick="submitCreateGroup()">🚀 إنشاء الجروب</button>  
       <button class="modal-btn secondary" onclick="closeModal('createGroupModal')">إلغاء</button>  
     </div>  
+  </div>
+
+  <!-- مودال إضافة عضو للجروب مباشرة بالـ ID -->  
+  <div class="modal" id="addMemberToGroupModal">  
+    <div class="modal-box">  
+      <h3>➕ إضافة عضو للمجموعة</h3>  
+      <div class="setting-item">  
+        <label>أدخل معرف العضو (ID مكون من 5 أرقام)</label>  
+        <input type="text" id="newMemberIdInput" placeholder="مثال: 54621">  
+      </div>  
+      <button class="modal-btn" onclick="submitAddMemberToGroup()">إضافة مباشرة</button>  
+      <button class="modal-btn secondary" onclick="closeModal('addMemberToGroupModal')">إلغاء</button>  
+    </div>  
   </div>      
   
+  <!-- مودال الإعدادات الشخصية للملف الشخصي -->  
   <div class="modal" id="settingsModal">  
     <div class="modal-box">  
       <h3>⚙️ الإعدادات الشخصية</h3>  
@@ -179,6 +213,7 @@
     </div>  
   </div>      
   
+  <!-- مودال إدارة وإعدادات الجروب -->  
   <div class="modal" id="groupSettingsModal">  
     <div class="modal-box">  
       <h3>⚙️ إدارة وإعدادات المجموعة</h3>  
@@ -193,8 +228,10 @@
         <div class="setting-item"><label>اسم المجموعة الجديد</label><input type="text" id="groupSettingsName"></div>  
         <div class="setting-item"><label>الوصف الجديد</label><input type="text" id="groupSettingsDesc"></div>  
         <button class="modal-btn" onclick="saveGroupSettings()">💾 حفظ تعديلات الجروب</button>  
+        <!-- زر إضافة عضو جديد المضاف داخل الإدارة -->  
+        <button class="modal-btn" style="background:#00d1ff; color:#000;" onclick="openModal('addMemberToGroupModal')">➕ إضافة عضو بالـ ID</button>  
       </div>  
-      <p id="groupNotAdminNotice" style="color: #888; text-align: center; display: none;">⚠️ تعديل البيانات متاح للمالك والمشرفين فقط.</p>  
+      <p id="groupNotAdminNotice" style="color: #888; text-align: center; display: none;">⚠️ تعديل البيانات وإضافة الأعضاء متاح للمالك والمشرفين فقط.</p>  
         
       <div class="member-list">  
         <h4>👥 أعضاء المجموعة:</h4>  
@@ -204,6 +241,7 @@
     </div>  
   </div>  
   
+  <!-- الهيكل الرئيسي للتطبيق -->  
   <div class="app" id="app">  
     <div class="sidebar">  
       <div class="sidebar-header">  
@@ -216,9 +254,9 @@
         <div class="tab active" id="tab-chats" onclick="switchTab('chats')">💬 محادثات</div>  
         <div class="tab" id="tab-groups" onclick="switchTab('groups')">👥 جروبات</div>  
       </div>  
-      <div class="action-buttons">  
-        <button class="action-btn" onclick="openModal('addFriendModal')">➕ صديق</button>  
-        <button class="action-btn secondary" onclick="openModal('createGroupModal')">👥 جروب</button>  
+      <div class="action-buttons" id="actionButtonsArea">  
+        <button class="action-btn" id="primarySidebarBtn" onclick="openModal('addFriendModal')">➕ صديق</button>  
+        <button class="action-btn secondary" id="secondarySidebarBtn" onclick="openModal('createGroupModal')">👥 جروب</button>  
       </div>  
       <div class="chat-list" id="chatList"></div>  
       <button class="settings-btn" onclick="openSettings()">⚙️ الإعدادات الشَخصية</button>  
@@ -253,7 +291,7 @@
   
   <script>  
     const socket = io();  
-    let currentUser = null, currentUsername = null, activeChat = null, activeTab = 'chats', searchResultUser = null;  
+    let currentUser = null, currentUsername = null, activeChat = null, activeTab = 'chats', searchResultUser = null, searchedGroupData = null;  
     let mediaRecorder = null, audioChunks = [];  
   
     function previewImage(fileInput, previewId) {  
@@ -351,6 +389,19 @@
       document.getElementById('tab-chats').classList.remove('active');  
       document.getElementById('tab-groups').classList.remove('active');  
       document.getElementById(`tab-${tab}`).classList.add('active');  
+  
+      let pBtn = document.getElementById('primarySidebarBtn');  
+      let sBtn = document.getElementById('secondarySidebarBtn');  
+      if(tab === 'chats') {  
+         pBtn.textContent = '➕ صديق';  
+         pBtn.setAttribute('onclick', "openModal('addFriendModal')");  
+         sBtn.style.display = 'none';  
+      } else {  
+         pBtn.textContent = '🔍 بحث جروب';  
+         pBtn.setAttribute('onclick', "openModal('searchGroupModal')");  
+         sBtn.style.display = 'block';  
+         sBtn.textContent = '👥 جروب';  
+      }  
       loadChats();  
     }  
     
@@ -378,7 +429,7 @@
           d.groups.forEach(g => {  
             list.innerHTML += `<div class="chat-item" onclick="openGroupChat('${g.id}')">  
               <img src="${g.avatar}" class="chat-avatar">  
-              <div class="chat-info"><div class="chat-name">${g.name}</div><div class="chat-preview">${g.description}</div></div>  
+              <div class="chat-info"><div class="chat-name">${g.name}</div><div class="chat-preview">ID: ${g.id} - ${g.description}</div></div>  
             </div>`;  
           });  
         } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">لم تشترك في أي جروب بعد.</div>'; }  
@@ -409,7 +460,7 @@
     
       activeChat = { id: groupId, type: 'group', group, toId: groupId };  
       document.getElementById('groupSettingsBtn').style.display = 'block';  
-      setupChatWindow(group.name, group.description, group.avatar);  
+      setupChatWindow(group.name, `ID المجموعة: ${group.id}`, group.avatar);  
         
       let res = await fetch(`/api/messages?fromId=${currentUser.id}&toId=${groupId}&type=group`);  
       let data = await res.json();  
@@ -648,6 +699,66 @@
       let res = await fetch('/api/add-friend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ myUsername: currentUsername, friendId: searchResultUser.id }) });  
       let data = await res.json();  
       if (data.success) { currentUser = data.updatedUser; loadChats(); closeModal('addFriendModal'); showNotification('✅ تمت إضافة الصديق بنجاح'); }  
+    }
+
+    async function searchGroupById() {  
+      let gId = document.getElementById('groupIdSearchInput').value.trim();  
+      if(!gId) return alert('يرجى إدخال الـ ID الخاص بالجروب');  
+      let res = await fetch(`/api/groups/search/${gId}`);  
+      let data = await res.json();  
+        
+      if(data.success) {  
+         searchedGroupData = data.group;  
+         document.getElementById('searchGroupAvatar').src = data.group.avatar;  
+         document.getElementById('searchGroupName').textContent = data.group.name;  
+         document.getElementById('searchGroupId').textContent = 'ID: ' + data.group.id;  
+           
+         let joinBtn = document.getElementById('joinGroupBtn');  
+         if(data.isMember) {  
+            joinBtn.textContent = 'أنت عضو بالفعل';  
+            joinBtn.disabled = true;  
+            joinBtn.style.background = '#333';  
+            joinBtn.style.color = '#888';  
+         } else {  
+            joinBtn.textContent = 'انضمام';  
+            joinBtn.disabled = false;  
+            joinBtn.style.background = '#00ff41';  
+            joinBtn.style.color = '#000';  
+         }  
+         document.getElementById('groupSearchResult').style.display = 'flex';  
+      } else { alert(data.error); }  
+    }  
+  
+    async function joinSearchedGroup() {  
+       if(!searchedGroupData) return;  
+       let res = await fetch('/api/groups/join', {  
+          method: 'POST',  
+          headers: { 'Content-Type': 'application/json' },  
+          body: JSON.stringify({ groupId: searchedGroupData.id, userId: currentUser.id })  
+       });  
+       let data = await res.json();  
+       if(data.success) {  
+          closeModal('searchGroupModal');  
+          showNotification('👥 تم انضمامك للجروب بنجاح!');  
+          loadChats();  
+       } else { alert(data.error); }  
+    }  
+  
+    async function submitAddMemberToGroup() {  
+       let targetId = document.getElementById('newMemberIdInput').value.trim();  
+       if(!targetId) return alert('يرجى كتابة ID العضو');  
+         
+       let res = await fetch('/api/groups/add-member', {  
+          method: 'POST',  
+          headers: { 'Content-Type': 'application/json' },  
+          body: JSON.stringify({ groupId: activeChat.id, targetUserId: targetId, requestUserId: currentUser.id })  
+       });  
+       let data = await res.json();  
+       if(data.success) {  
+          closeModal('addMemberToGroupModal');  
+          showNotification('✅ تم إضافة العضو للمجموعة بنجاح');  
+          openGroupSettings();  
+       } else { alert(data.error); }  
     }  
     
     async function submitCreateGroup() {  
@@ -683,7 +794,7 @@
       } else { alert("فشل تحديث البيانات الشخصية"); }   
     }  
     
-    window.onload = function() { localStorage.clear(); };  
+    window.onload = function() { localStorage.clear(); document.getElementById('secondarySidebarBtn').style.display = 'none'; };  
   </script>  
 </body>  
 </html>

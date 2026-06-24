@@ -11,11 +11,9 @@ const io = new Server(server, { maxHttpBufferSize: 1e8 });
 app.use(express.json({ limit: '100mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// مسارات ملفات الحفظ الدائم داخل السيرفر
 const USERS_FILE = path.join(__dirname, 'users.json');
 const GROUPS_FILE = path.join(__dirname, 'groups.json');
 
-// دالات إدارة الحفظ التلقائي في ملفات الـ JSON
 function loadData() {
     let users = {}, groups = {};
     if (fs.existsSync(USERS_FILE)) {
@@ -32,7 +30,6 @@ function saveData(users, groups) {
     fs.writeFileSync(GROUPS_FILE, JSON.stringify(groups, null, 2), 'utf8');
 }
 
-// قراءة البيانات المحفوظة عند التشغيل
 let { users, groups } = loadData();
 let usersById = {};
 
@@ -42,8 +39,14 @@ function rebuildIdCache() {
 }
 rebuildIdCache();
 
+// دالة توليد ID مستخدم (5 أرقام)
 function generateNumericId() {
     return Math.floor(10000 + Math.random() * 90000).toString();
+}
+
+// دالة توليد ID جروب مميز (7 أرقام) كما طلبت
+function generateGroup7DigitId() {
+    return Math.floor(1000000 + Math.random() * 9000000).toString();
 }
 
 const messagesHistory = []; 
@@ -107,12 +110,13 @@ app.post('/api/update-profile', (req, res) => {
     res.json({ success: true, user });
 });
 
+// إنشاء الجروب بـ ID مكون من 7 أرقام
 app.post('/api/groups/create', (req, res) => {
     const { name, description, avatar, creatorId, creatorUsername } = req.body;
     const user = users[creatorUsername];
     if (!name || !user) return res.json({ success: false, error: "الاسم مطلوب" });
 
-    const groupId = "g_" + Math.floor(1000 + Math.random() * 9000);
+    const groupId = generateGroup7DigitId(); // توليد المعرف الرقمي الجديد
     const newGroup = {
         id: groupId, name, description: description || "لا يوجد وصف",
         avatar: avatar || "https://cdn-icons-png.flaticon.com/512/32/32441.png",
@@ -126,6 +130,52 @@ app.post('/api/groups/create', (req, res) => {
     
     saveData(users, groups); 
     res.json({ success: true, group: newGroup });
+});
+
+// البحث عن الجروب بالـ ID من القائمة الجانبية
+app.get('/api/groups/search/:groupId', (req, res) => {
+    const group = groups[req.params.groupId];
+    if (!group) return res.json({ success: false, error: "لم يتم العثور على مجموعة بهذا الرقم" });
+    res.json({ success: true, group });
+});
+
+// انضمام مستخدم للجروب عبر محرك البحث
+app.post('/api/groups/join', (req, res) => {
+    const { groupId, userId } = req.body;
+    const group = groups[groupId];
+    if (!group) return res.json({ success: false, error: "المجموعة غير موجودة" });
+
+    if (!group.members.includes(userId)) {
+        group.members.push(userId);
+        group.roles[userId] = 'member';
+    }
+    saveData(users, groups);
+    res.json({ success: true });
+});
+
+// إضافة عضو للجروب مباشرة بواسطة المشرف أو المالك عن طريق الـ ID
+app.post('/api/groups/add-member', (req, res) => {
+    const { groupId, targetUserId, requestUserId } = req.body;
+    const group = groups[groupId];
+    if (!group) return res.json({ success: false, error: "المجموعة غير موجودة" });
+
+    const myRole = group.roles[requestUserId];
+    if (myRole !== 'owner' && myRole !== 'admin') {
+        return res.json({ success: false, error: "لا تملك صلاحية إضافة أعضاء للمجموعة" });
+    }
+
+    const targetUser = usersById[targetUserId];
+    if (!targetUser) return res.json({ success: false, error: "لم يتم العثور على مستخدم بهذا الـ ID" });
+
+    if (group.members.includes(targetUserId)) {
+        return res.json({ success: false, error: "المستخدم عضو بالفعل في هذه المجموعة" });
+    }
+
+    group.members.push(targetUserId);
+    group.roles[targetUserId] = 'member';
+
+    saveData(users, groups);
+    res.json({ success: true });
 });
 
 app.get('/api/user-groups/:userId', (req, res) => {
