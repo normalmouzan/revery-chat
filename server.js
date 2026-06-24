@@ -47,7 +47,6 @@ function generateGroup7DigitId() {
     return Math.floor(1000000 + Math.random() * 9000000).toString();
 }
 
-// مصفوفة حفظ الرسائل مؤقتاً (مضاف لها معرف فريد وحالة الرسالة)
 const messagesHistory = []; 
 
 // ==== واجهات برمجية التطبيق (APIs) ====
@@ -133,7 +132,11 @@ app.post('/api/groups/create', (req, res) => {
 app.get('/api/groups/search/:groupId', (req, res) => {
     const group = groups[req.params.groupId];
     if (!group) return res.json({ success: false, error: "لم يتم العثور على مجموعة بهذا الرقم" });
-    res.json({ success: true, group });
+    
+    // إرسال حالة إذا كان المستخدم عضواً أم لا لتحديث زر الانضمام بالفرونت اند
+    const userId = req.query.userId;
+    const isMember = group.members.includes(userId);
+    res.json({ success: true, group, isMember });
 });
 
 app.post('/api/groups/join', (req, res) => {
@@ -145,6 +148,13 @@ app.post('/api/groups/join', (req, res) => {
         group.members.push(userId);
         group.roles[userId] = 'member';
     }
+    
+    const user = usersById[userId];
+    if (user) {
+        if (!user.groups) user.groups = [];
+        if (!user.groups.includes(groupId)) user.groups.push(groupId);
+    }
+
     saveData(users, groups);
     res.json({ success: true });
 });
@@ -168,6 +178,9 @@ app.post('/api/groups/add-member', (req, res) => {
 
     group.members.push(targetUserId);
     group.roles[targetUserId] = 'member';
+
+    if (!targetUser.groups) targetUser.groups = [];
+    targetUser.groups.push(groupId);
 
     saveData(users, groups);
     res.json({ success: true });
@@ -256,6 +269,40 @@ app.post('/api/groups/kick', (req, res) => {
     res.json({ success: true });
 });
 
+// ==== [الواجهة البرمجية الجديدة: الخروج الطوعي من المجموعة] ====
+app.post('/api/groups/leave', (req, res) => {
+    const { groupId, userId } = req.body;
+    const group = groups[groupId];
+    if (!group) return res.json({ success: false, error: "المجموعة غير موجودة" });
+    if (!group.members.includes(userId)) return res.json({ success: false, error: "أنت لست عضواً في هذه المجموعة بالفعل" });
+
+    // إذا كان العضو هو المالك وهناك أعضاء آخرين، يجب تعيين مالك جديد أولاً من قائمة الإعدادات
+    if (group.roles[userId] === 'owner' && group.members.length > 1) {
+        return res.json({ success: false, error: "أنت مالك المجموعة. يرجى نقل الملكية لعضو آخر أولاً قبل الخروج." });
+    }
+
+    // حذف العضو من المجموعة
+    group.members = group.members.filter(mId => mId !== userId);
+    if (group.roles[userId]) delete group.roles[userId];
+
+    // تحديث مصفوفة المجموعات بملف المستخدم
+    const user = usersById[userId];
+    if (user && user.groups) {
+        user.groups = user.groups.filter(gId => gId !== groupId);
+    }
+
+    // إذا أصبحت المجموعة فارغة تماماً يتم حذفها تلقائياً
+    if (group.members.length === 0) {
+        delete groups[groupId];
+    }
+
+    saveData(users, groups);
+
+    // إعلام الأعضاء الآخرين بخروج العضو لتحديث واجهاتهم
+    io.emit('group-updated', { groupId, kickedId: userId, name: group.name, avatar: group.avatar });
+    res.json({ success: true });
+});
+
 app.get('/api/messages', (req, res) => {
     const { fromId, toId, type } = req.query;
     let history = [];
@@ -267,7 +314,6 @@ app.get('/api/messages', (req, res) => {
     res.json({ success: true, history });
 });
 
-// قائمة لحفظ السوكيتس المتصلة لمعرفة هل الـ User فاتح حالياً ونسهل الـ Delivery Tick
 const connectedUsers = {};
 
 io.on('connection', (socket) => {
@@ -278,7 +324,6 @@ io.on('connection', (socket) => {
         currentSocketUser = userId;
         connectedUsers[userId] = socket.id;
         
-        // عند دخول المستخدم، أي رسائل موجهة له في الخاص تتحول لـ دليفرد (صحين) لو كانت صح واحد
         messagesHistory.forEach(msg => {
             if(msg.type === 'private' && msg.toId === userId && msg.status === 'sent') {
                 msg.status = 'delivered';
@@ -290,7 +335,6 @@ io.on('connection', (socket) => {
     socket.on('send-message', (data, callback) => {
         const msgId = 'msg_' + Math.random().toString(36).substr(2, 9) + Date.now();
         
-        // تحديد الحالة المبدئية: لو الطرف التاني متصل وسجل دخول نديها صحين فوراً، لو لا صح واحد
         let initialStatus = 'sent';
         if (data.type === 'private' && connectedUsers[data.toId]) {
             initialStatus = 'delivered';
@@ -305,7 +349,6 @@ io.on('connection', (socket) => {
         
         messagesHistory.push(messageObject);
 
-        // إرجاع الـ ID والحالة للراسل فوراً لتحديث واجهته
         if(callback) callback({ msgId, status: initialStatus });
 
         if (data.type === 'private') {
@@ -320,7 +363,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // حدث جديد: العميل يبلغ السيرفر إنه فتح شات وقرأ الرسائل بالفعل (صحين زرق)
     socket.on('mark-as-seen', (data) => {
         const { readerId, targetId, type } = data;
         messagesHistory.forEach(msg => {
@@ -330,7 +372,6 @@ io.on('connection', (socket) => {
                     socket.to(targetId).emit('message-status-updated', { msgId: msg.id, status: 'seen' });
                 }
             }
-            // بالنسبة للجروبات، يمكن توسيعها لـ seen لكل مستخدم، لكن للتبسيط يتم تحديث الحالة محلياً للطرف الآخر عند القراءة
         });
     });
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>  
 <html lang="ar" dir="rtl">  
 <head>  
-  <title>Revery-app</title>  
+  <title>revery-app</title>  
   <meta charset="UTF-8">  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">  
   <script src="/socket.io/socket.io.js"></script>  
@@ -52,12 +52,11 @@
     .message.received { background: #1e1e1e; color: #fff; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 5px; border: 1px solid #333; }  
     .message-author { font-size: 11px; color: #00ff41; margin-bottom: 4px; font-weight: bold; }  
     
-    /* تصميم الفوتر الخاص بكل رسالة ليشمل التيك والوقت معاً */
     .message-footer { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 5px; font-size: 10px; opacity: 0.7; }  
     .message.sent .message-footer { color: #000; }  
     .message.received .message-footer { color: #888; }  
     .msg-status { font-size: 12px; display: inline-block; font-weight: bold; }  
-    .msg-status.seen { color: #0055ff; } /* تيك زرقاء للرسائل المقروءة */
+    .msg-status.seen { color: #0055ff; } 
 
     .message img, .message video { max-width: 100%; border-radius: 10px; margin-top: 5px; display: block; }  
     .message audio { margin-top: 5px; width: 100%; max-width: 240px; }  
@@ -118,7 +117,7 @@
       <input type="text" id="loginUser" placeholder="اسم المستخدم أو الـ ID">  
       <input type="password" id="loginPass" placeholder="كلمة المرور">  
       <button onclick="login()">دخول</button>  
-      <div class="auth-toggle">ليس لديك حساب؟ <span onclick="showRegister()">سجل الآن</span></div>  
+      <div class="auth-toggle">ليس لديك حساب？ <span onclick="showRegister()">سجل الآن</span></div>  
     </div>  
   </div>      
   
@@ -235,7 +234,10 @@
         <h4>👥 أعضاء المجموعة:</h4>  
         <div id="groupMembersContainer"></div>  
       </div>  
-      <button class="modal-btn secondary" style="margin-top:20px;" onclick="closeModal('groupSettingsModal')">إغلاق</button>  
+
+      <button class="modal-btn" style="background: #ff3333; color: #fff; margin-top: 25px;" onclick="leaveCurrentGroup()">🚪 مغادرة المجموعة</button>
+      
+      <button class="modal-btn secondary" style="margin-top:10px;" onclick="closeModal('groupSettingsModal')">إغلاق</button>  
     </div>  
   </div>  
   
@@ -312,7 +314,6 @@
         let direction = (data.fromId === currentUser.id) ? 'sent' : 'received';  
         appendMessage(data.fromName, data.message, direction, data.fileType, data.id, data.status);  
         
-        // بمجرد استقبال رسالة في الشات المفتوح حالياً، نبلغ السيرفر فوراً بقراءتها
         if(direction === 'received') {
           socket.emit('mark-as-seen', { readerId: currentUser.id, targetId: data.fromId, type: data.type });
         }
@@ -323,7 +324,6 @@
       }  
     });  
     
-    // استماع لتحديث حالة الرسالة الفردية (صح، صحين، صحين زرق)
     socket.on('message-status-updated', (data) => {
       let statusElem = document.getElementById(`status-${data.msgId}`);
       if(statusElem) {
@@ -337,14 +337,16 @@
     socket.on('group-updated', (data) => {  
       if (activeChat && activeChat.type === 'group' && activeChat.id === data.groupId) {  
          if (data.kickedId === currentUser.id) {  
-             alert('❌ لقد تم طردك من هذه المجموعة من قِبل الإدارة.');  
+             alert('❌ لقد غادرت أو تم طردك من هذه المجموعة.');  
              closeChatPage();  
              loadChats();  
          } else {  
              document.getElementById('activeChatName').textContent = data.name;  
              document.getElementById('activeChatAvatar').src = data.avatar;  
          }  
-      }  
+      } else if (activeTab === 'groups') {
+         loadChats(); // تحديث القائمة الجانبية إذا تغير شيء بالمجموعات بالخلفية
+      }
     });  
     
     function showNotification(text) {  
@@ -454,7 +456,6 @@
       document.getElementById('groupSettingsBtn').style.display = 'none';  
       setupChatWindow(name, `المعرف: ${id}`, avatar);  
       
-      // إخبار السيرفر بفتح الشات لقراءة الرسائل المتأخرة
       socket.emit('mark-as-seen', { readerId: currentUser.id, targetId: id, type: 'private' });
         
       let res = await fetch(`/api/messages?fromId=${currentUser.id}&toId=${id}&type=private`);  
@@ -608,6 +609,28 @@
             openGroupSettings();  
         } else { alert(data.error); }  
     }  
+
+    // ==== [الدالة الجديدة: مغادرة المجموعة من جهة العميل] ====
+    async function leaveCurrentGroup() {
+        if (!activeChat || activeChat.type !== 'group') return;
+        if (!confirm('🚪 هل أنت متأكد تماماً أنك تريد الخروج ومغادرة هذه المجموعة؟')) return;
+
+        let res = await fetch('/api/groups/leave', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId: activeChat.id, userId: currentUser.id })
+        });
+        let data = await res.json();
+
+        if (data.success) {
+            closeModal('groupSettingsModal');
+            closeChatPage();
+            showNotification('🚪 تم خروجك من المجموعة بنجاح');
+            loadChats();
+        } else {
+            alert(data.error);
+        }
+    }
     
     function sendMessage() {  
       let input = document.getElementById('messageInput');  
@@ -623,7 +646,6 @@
         fileType: 'text'  
       };  
       
-      // إرسال الرسالة والحصول على معرفها وحالتها الفورية من السيرفر لتحديث الواجهة بمؤشر الـ Ticks
       socket.emit('send-message', msgData, (ack) => {
          appendMessage(currentUser.name, text, 'sent', 'text', ack.msgId, ack.status);  
       });
@@ -633,7 +655,6 @@
     function appendMessage(author, text, dir, fileType = 'text', msgId = '', status = 'sent') {  
       let box = document.getElementById('messages');  
       
-      // حماية لمنع تكرار حقن الرسالة في الـ DOM لو منشأة مسبقاً
       if(msgId && document.getElementById(`msg-container-${msgId}`)) return;
 
       let msg = document.createElement('div');  
@@ -651,7 +672,6 @@
         content = `<audio src="${text}" controls></audio>`;  
       }  
     
-      // إعداد أيقونة علامة الصح (✓) بناءً على حالة الرسالة
       let tick = '✓';
       if(status === 'delivered') tick = '✓✓';
       else if(status === 'seen') tick = '✓✓';
@@ -702,13 +722,12 @@
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  
         audioChunks = [];  
         
-        // تحديد الـ mimeType الأنسب والأكثر استقراراً في الموبايلات والكمبيوتر
         let options = { mimeType: 'audio/webm' };
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
             options = { mimeType: 'audio/ogg' };
         }
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = {}; // ترك المتصفح يختار الصيغة التلقائية كخيار احتياطي كامل
+            options = {}; 
         }
 
         mediaRecorder = new MediaRecorder(stream, options);  
@@ -730,7 +749,6 @@
           stream.getTracks().forEach(track => track.stop());  
         };  
         
-        // تسجيل الصوت في دفعات بافر كل ثانية لضمان استقرار الفويس وعدم فقده بالموبايل
         mediaRecorder.start(1000);  
         btn.classList.add('recording');  
         btn.innerText = '🛑';  
@@ -763,7 +781,9 @@
     async function searchGroupById() {  
       let gId = document.getElementById('groupIdSearchInput').value.trim();  
       if(!gId) return alert('يرجى إدخال الـ ID الخاص بالجروب');  
-      let res = await fetch(`/api/groups/search/${gId}`);  
+      
+      // تمرير الـ userId الحالي لمعرفة هل هو مشترك أم لا
+      let res = await fetch(`/api/groups/search/${gId}?userId=${currentUser.id}`);  
       let data = await res.json();  
         
       if(data.success) {  
