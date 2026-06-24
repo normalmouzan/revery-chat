@@ -1,615 +1,690 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <title>Chat App</title>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="/socket.io/socket.io.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0a0a0a; color: #fff; height: 100vh; overflow: hidden; }
-    .auth-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #0a0a0a, #1a1a2e); }
-    .auth-box { background: #111; border: 2px solid #00ff41; border-radius: 20px; padding: 40px; width: 400px; box-shadow: 0 0 40px rgba(0, 255, 65, 0.2); }
-    .auth-box h2 { color: #00ff41; text-align: center; margin-bottom: 30px; font-size: 28px; }
-    .auth-box input { width: 100%; padding: 14px; margin-bottom: 15px; border: 1px solid #333; border-radius: 10px; background: #000; color: #fff; font-size: 16px; outline: none; }
-    .auth-box input:focus { border-color: #00ff41; box-shadow: 0 0 10px rgba(0, 255, 65, 0.3); }
-    .auth-box button { width: 100%; padding: 14px; background: #00ff41; color: #000; border: none; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; }
-    .auth-toggle { text-align: center; color: #888; cursor: pointer; margin-top: 15px; }
-    .auth-toggle span { color: #00ff41; text-decoration: underline; }
-    .app { display: none; height: 100vh; }
-    .app.active { display: flex; }
-    .sidebar { width: 350px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; }
-    .sidebar-header { padding: 20px; background: #00ff41; color: #000; }
-    .user-info { display: flex; align-items: center; gap: 12px; }
-    .user-avatar { width: 50px; height: 50px; border-radius: 50%; border: 3px solid #000; object-fit: cover; }
-    .tabs { display: flex; background: #1a1a1a; }
-    .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; font-size: 14px; }
-    .tab.active { border-bottom-color: #00ff41; color: #00ff41; background: #1a2f1a; }
-    .chat-list { flex: 1; overflow-y: auto; }
-    .chat-item { display: flex; align-items: center; gap: 12px; padding: 15px; cursor: pointer; border-bottom: 1px solid #222; }
-    .chat-item:hover, .chat-item.active { background: #1a2f1a; }
-    .chat-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
-    .chat-info { flex: 1; text-align: right; }
-    .chat-name { font-weight: bold; }
-    .chat-preview { font-size: 13px; color: #888; }
-    .settings-btn { padding: 15px; background: #1a1a1a; border: none; color: #00ff41; cursor: pointer; border-top: 1px solid #222; }
-    .chat-area { flex: 1; display: flex; flex-direction: column; background: #0a0a0a; }
-    .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #444; }
-    .chat-header { padding: 20px; background: #111; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 15px; }
-    .chat-header-info { flex: 1; }
-    .messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-    .message { max-width: 60%; padding: 12px 18px; border-radius: 15px; font-size: 15px; }
-    .message.sent { background: #00ff41; color: #000; align-self: flex-end; border-bottom-left-radius: 5px; }
-    .message.received { background: #333; color: #fff; align-self: flex-start; border-bottom-right-radius: 5px; }
-    .message-author { font-size: 11px; color: #00ff41; margin-bottom: 3px; font-weight: bold; }
-    .message-time { font-size: 10px; opacity: 0.7; margin-top: 5px; text-align: left; }
-    .input-area { padding: 15px 20px; background: #111; border-top: 1px solid #222; display: flex; gap: 10px; position: relative; }
-    .input-area input { flex: 1; padding: 12px 20px; border: 1px solid #333; border-radius: 25px; background: #000; color: #fff; outline: none; }
-    .send-btn { padding: 12px 25px; background: #00ff41; color: #000; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); justify-content: center; align-items: center; z-index: 1000; }
-    .modal.active { display: flex; }
-    .modal-box { background: #111; border: 2px solid #00ff41; border-radius: 20px; padding: 30px; width: 450px; max-height: 80vh; overflow-y: auto; }
-    .modal-box h3 { color: #00ff41; margin-bottom: 20px; text-align: center; }
-    .setting-item { margin-bottom: 15px; }
-    .setting-item label { display: block; margin-bottom: 5px; color: #888; font-size: 13px; }
-    .setting-item input[type="text"] { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 8px; background: #000; color: #fff; outline: none; }
-    .modal-btn { width: 100%; padding: 12px; background: #00ff41; color: #000; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-    .modal-btn.secondary { background: #333; color: #fff; }
-    .action-buttons { padding: 10px 15px; display: flex; gap: 10px; }
-    .action-btn { flex: 1; padding: 10px; font-size: 14px; background: #00ff41; color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    .action-btn.secondary { background: #333; color: #fff; }
-    .upload-preview { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 15px; }
-    .upload-preview img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #00ff41; }
-    .file-label { display: inline-block; background: #222; color: #00ff41; border: 1px dashed #00ff41; padding: 10px; border-radius: 8px; cursor: pointer; text-align: center; width: 100%; font-size: 14px; }
-    .member-item { display: flex; align-items: center; justify-content: space-between; background: #1a1a1a; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
-    .member-btn { padding: 4px 8px; font-size: 11px; background: #ff3333; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-    .member-btn.admin-toggle { background: #00a2ff; margin-right: 5px; }
-    .notification { display: none; position: fixed; top: 20px; left: 20px; background: #00ff41; color: #000; padding: 15px 25px; border-radius: 10px; font-weight: bold; box-shadow: 0 0 15px rgba(0,255,65,0.5); z-index: 2000; }
-  </style>
-</head>
-<body>
-
-  <div class="notification" id="notification"><span id="notifText">رسالة جديدة!</span></div>
-
-  <!-- تسجيل دخول -->
-  <div class="auth-screen" id="loginScreen">
-    <div class="auth-box">
-      <h2>🔐 تسجيل الدخول</h2>
-      <input type="text" id="loginUser" placeholder="اسم المستخدم أو الـ ID">
-      <input type="password" id="loginPass" placeholder="كلمة المرور">
-      <button onclick="login()">دخول</button>
-      <div class="auth-toggle">ليس لديك حساب؟ <span onclick="showRegister()">سجل الآن</span></div>
-    </div>
-  </div>
-
-  <!-- إنشاء حساب -->
-  <div class="auth-screen" id="registerScreen" style="display: none;">
-    <div class="auth-box">
-      <h2>📝 إنشاء حساب</h2>
-      <input type="text" id="regUsername" placeholder="اسم المستخدم (بالإنجليزي)">
-      <input type="text" id="regName" placeholder="الاسم المستعار">
-      <input type="password" id="regPass" placeholder="كلمة المرور">
-      <input type="password" id="regPass2" placeholder="تأكيد كلمة المرور">
-      <button onclick="register()">تسجيل</button>
-      <div class="auth-toggle">لديك حساب بالفعل؟ <span onclick="showLogin()">سجل دخول</span></div>
-    </div>
-  </div>
-
-  <!-- إضافة صديق -->
-  <div class="modal" id="addFriendModal">
-    <div class="modal-box">
-      <h3>➕ إضافة صديق</h3>
-      <div class="setting-item">
-        <label>🔍 أدخل الـ ID (أرقام فقط)</label>
-        <input type="text" id="friendIdInput" placeholder="مثال: 89122">
-      </div>
-      <button class="modal-btn" onclick="searchFriend()">🔍 بحث</button>
-      <div id="searchResult" style="display:none; align-items:center; gap:15px; margin:15px 0; background:#000; padding:10px; border-radius:8px;">
-        <img id="searchAvatar" src="" class="chat-avatar">
-        <div style="flex:1;"><div id="searchName" style="font-weight:bold;"></div><div id="searchId" style="color:#888;font-size:12px;"></div></div>
-        <button class="modal-btn" style="width:auto; padding:5px 15px; margin:0;" onclick="addFriend()">إضافة</button>
-      </div>
-      <button class="modal-btn secondary" onclick="closeModal('addFriendModal')">إلغاء</button>
-    </div>
-  </div>
-
-  <!-- إنشاء جروب -->
-  <div class="modal" id="createGroupModal">
-    <div class="modal-box">
-      <h3>👥 إنشاء مجموعة جديدة</h3>
-      <div class="upload-preview">
-        <img id="groupCreateImgPreview" src="https://cdn-icons-png.flaticon.com/512/32/32441.png">
-        <label class="file-label">
-          📸 اختر صورة المجموعة من جهازك
-          <input type="file" id="groupCreateFile" accept="image/*" style="display:none;" onchange="previewImage(this, 'groupCreateImgPreview')">
-        </label>
-      </div>
-      <div class="setting-item"><label>اسم المجموعة</label><input type="text" id="groupNameInput" placeholder="اسم الجروب"></div>
-      <div class="setting-item"><label>وصف المجموعة</label><input type="text" id="groupDescInput" placeholder="اكتب نبذة عن المجموعة"></div>
-      <button class="modal-btn" onclick="submitCreateGroup()">🚀 إنشاء الجروب</button>
-      <button class="modal-btn secondary" onclick="closeModal('createGroupModal')">إلغاء</button>
-    </div>
-  </div>
-
-  <!-- إدارة الجروب -->
-  <div class="modal" id="manageGroupModal">
-    <div class="modal-box">
-      <h3>⚙️ إدارة وإعدادات المجموعة</h3>
-      <div class="upload-preview">
-        <img id="groupManageImgPreview" src="">
-        <label class="file-label">
-          🔄 تغيير صورة المجموعة
-          <input type="file" id="groupManageFile" accept="image/*" style="display:none;" onchange="previewImage(this, 'groupManageImgPreview')">
-        </label>
-      </div>
-      <div class="setting-item"><label>اسم المجموعة</label><input type="text" id="manageGroupName"></div>
-      <div class="setting-item"><label>الوصف</label><input type="text" id="manageGroupDesc"></div>
-      <button class="modal-btn" onclick="submitUpdateGroup()">💾 حفظ البيانات</button>
+<!DOCTYPE html>  
+<html lang="ar" dir="rtl">  
+<head>  
+  <title>revery-chat</title>  
+  <meta charset="UTF-8">  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+  <script src="/socket.io/socket.io.js"></script>  
+  <style>  
+    * { margin: 0; padding: 0; box-sizing: border-box; }  
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0a0a0a; color: #fff; height: 100vh; overflow: hidden; }  
+    
+    .auth-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #0a0a0a, #1a1a2e); }  
+    .auth-box { background: #111; border: 2px solid #00ff41; border-radius: 20px; padding: 40px; width: 400px; box-shadow: 0 0 40px rgba(0, 255, 65, 0.2); }  
+    .auth-box h2 { color: #00ff41; text-align: center; margin-bottom: 30px; font-size: 28px; }  
+    .auth-box input { width: 100%; padding: 14px; margin-bottom: 15px; border: 1px solid #333; border-radius: 10px; background: #000; color: #fff; font-size: 16px; outline: none; }  
+    .auth-box input:focus { border-color: #00ff41; box-shadow: 0 0 10px rgba(0, 255, 65, 0.3); }  
+    .auth-box button { width: 100%; padding: 14px; background: #00ff41; color: #000; border: none; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; }  
+    .auth-toggle { text-align: center; color: #888; cursor: pointer; margin-top: 15px; }  
+    .auth-toggle span { color: #00ff41; text-decoration: underline; }  
+    
+    .app { display: none; height: 100vh; width: 100vw; position: relative; }  
+    .app.active { display: flex; }  
+    
+    /* تعديل الـ Sidebar لضمان ثبات العناصر وتجاوبها على الهاتف */
+    .sidebar { width: 350px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; height: 100vh; z-index: 5; }  
+    .sidebar-header { padding: 20px; background: #00ff41; color: #000; flex-shrink: 0; }  
+    .user-info { display: flex; align-items: center; gap: 12px; }  
+    .user-avatar { width: 50px; height: 50px; border-radius: 50%; border: 3px solid #000; object-fit: cover; }  
+    .tabs { display: flex; background: #1a1a1a; flex-shrink: 0; }  
+    .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; font-size: 14px; }  
+    .tab.active { border-bottom-color: #00ff41; color: #00ff41; background: #1a2f1a; }  
+    
+    .chat-list { flex: 1; overflow-y: auto; }  
+    .chat-item { display: flex; align-items: center; gap: 12px; padding: 15px; cursor: pointer; border-bottom: 1px solid #222; }  
+    .chat-item:hover, .chat-item.active { background: #1a2f1a; }  
+    .chat-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }  
+    .chat-info { flex: 1; text-align: right; }  
+    .chat-name { font-weight: bold; }  
+    .chat-preview { font-size: 13px; color: #888; }  
+    
+    /* تثبيت زر الإعدادات الشخصية أسفل الـ Sidebar دائماً */
+    .settings-btn { padding: 15px; background: #1a1a1a; border: none; color: #00ff41; cursor: pointer; border-top: 1px solid #222; width: 100%; text-align: center; font-size: 15px; font-weight: bold; position: sticky; bottom: 0; flex-shrink: 0; }  
+    
+    .chat-area { flex: 1; display: flex; flex-direction: column; background: #050505; height: 100vh; position: relative; }  
+    .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #444; }  
+    .chat-header { padding: 15px 20px; background: #111; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 15px; }  
+    .chat-header-info { flex: 1; }  
+    .back-btn { display: none; background: transparent; border: none; color: #00ff41; font-size: 20px; cursor: pointer; margin-left: 10px; }  
+    .group-settings-icon { font-size: 22px; cursor: pointer; color: #00ff41; display: none; padding: 5px; }  
+    
+    .messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 75px; }  
+    .message { max-width: 65%; padding: 12px 18px; border-radius: 18px; font-size: 15px; line-height: 1.4; word-break: break-word; }  
+    .message.sent { background: #00ff41; color: #000; align-self: flex-start; margin-right: auto; border-bottom-left-radius: 5px; }  
+    .message.received { background: #1e1e1e; color: #fff; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 5px; border: 1px solid #333; }  
+    .message-author { font-size: 11px; color: #00ff41; margin-bottom: 4px; font-weight: bold; }  
+    .message-time { font-size: 10px; opacity: 0.6; margin-top: 5px; text-align: left; }  
+    .message img, .message video { max-width: 100%; border-radius: 10px; margin-top: 5px; display: block; }  
+    .message audio { margin-top: 5px; width: 100%; max-width: 240px; }  
+  
+    .input-area { position: absolute; bottom: 0; left: 0; right: 0; height: 70px; padding: 12px 20px; background: #111; border-top: 1px solid #222; display: flex; align-items: center; gap: 10px; z-index: 10; }  
+    .input-area input { flex: 1; padding: 12px 20px; border: 1px solid #333; border-radius: 25px; background: #000; color: #fff; outline: none; font-size: 15px; }  
+    .input-area input:focus { border-color: #00ff41; }  
       
-      <hr style="border-color:#222; margin:15px 0;">
-      <h4>➕ إضافة عضو جديد للجروب</h4>
-      <div class="setting-item" style="margin-top:5px;"><input type="text" id="groupMemberIdInput" placeholder="ادخل ID العضو"></div>
-      <button class="modal-btn" style="background:#00d4ff; margin-bottom:15px;" onclick="submitAddMemberToGroup()">إضافة للمجموعة</button>
+    .input-btn { background: transparent; border: none; color: #00ff41; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; transition: background 0.2s; }  
+    .input-btn:hover { background: #1a2f1a; }  
+    .input-btn.recording { color: #ff3333; animation: pulse 1s infinite; }  
+    .send-btn { padding: 10px 20px; background: #00ff41; color: #000; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; font-size: 15px; }  
       
-      <hr style="border-color:#222; margin:15px 0;">
-      <h4>👥 قائمة الأعضاء والتحكم في الرتب</h4>
-      <div id="groupMembersList" style="margin-top:10px; max-height:200px; overflow-y:auto;"></div>
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); justify-content: center; align-items: center; z-index: 1000; }  
+    .modal.active { display: flex; }  
+    .modal-box { background: #111; border: 2px solid #00ff41; border-radius: 20px; padding: 30px; width: 450px; max-height: 80vh; overflow-y: auto; }  
+    .modal-box h3 { color: #00ff41; margin-bottom: 20px; text-align: center; }  
+    .setting-item { margin-bottom: 15px; }  
+    .setting-item label { display: block; margin-bottom: 5px; color: #888; font-size: 13px; }  
+    .setting-item input[type="text"] { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 8px; background: #000; color: #fff; outline: none; }  
+    .modal-btn { width: 100%; padding: 12px; background: #00ff41; color: #000; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; }  
+    .modal-btn.secondary { background: #333; color: #fff; }  
+    .action-buttons { padding: 10px 15px; display: flex; gap: 10px; flex-shrink: 0; }  
+    .action-btn { flex: 1; padding: 10px; font-size: 14px; background: #00ff41; color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }  
+    .action-btn.secondary { background: #333; color: #fff; }  
+    .upload-preview { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 15px; }  
+    .upload-preview img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #00ff41; }  
+    .file-label { display: inline-block; background: #222; color: #00ff41; border: 1px dashed #00ff41; padding: 10px; border-radius: 8px; cursor: pointer; text-align: center; width: 100%; font-size: 14px; }  
       
-      <button class="modal-btn secondary" style="margin-top:15px;" onclick="closeModal('manageGroupModal')">إغلاق</button>
-    </div>
-  </div>
-
-  <!-- الإعدادات الشخصية -->
-  <div class="modal" id="settingsModal">
-    <div class="modal-box">
-      <h3>⚙️ الإعدادات الشخصية</h3>
-      <div class="upload-preview">
-        <img id="profileImgPreview" src="">
-        <label class="file-label">
-          📸 اختر صورتك الشخصية
-          <input type="file" id="profileFile" accept="image/*" style="display:none;" onchange="previewImage(this, 'profileImgPreview')">
-        </label>
-      </div>
-      <div class="setting-item"><label>الاسم المستعار الجديد</label><input type="text" id="settingsName"></div>
-      <button class="modal-btn" onclick="saveSettings()">💾 حفظ</button>
-      <button class="modal-btn secondary" onclick="closeModal('settingsModal')">إلغاء</button>
-    </div>
-  </div>
-
-  <!-- الشاشة الرئيسية -->
-  <div class="app" id="app">
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="user-info">
-          <img src="" class="user-avatar" id="sidebarAvatar">
-          <div class="user-details"><h3 id="sidebarName">...</h3><div class="user-id" id="sidebarId">ID: 00000</div></div>
-        </div>
-      </div>
-      <div class="tabs">
-        <div class="tab active" id="tab-chats" onclick="switchTab('chats')">💬 محادثات</div>
-        <div class="tab" id="tab-groups" onclick="switchTab('groups')">👥 جروبات</div>
-      </div>
-      <div class="action-buttons">
-        <button class="action-btn" onclick="openModal('addFriendModal')">➕ صديق</button>
-        <button class="action-btn secondary" onclick="openModal('createGroupModal')">👥 جروب</button>
-      </div>
-      <div class="chat-list" id="chatList"></div>
-      <button class="settings-btn" onclick="openSettings()">⚙️ الإعدادات</button>
-    </div>
-
-    <div class="chat-area">
-      <div class="empty-state" id="emptyState">
-        <div style="font-size: 80px;">🚀</div><p style="color:#666;">اختر صديق أو جروب لبدء الشات</p>
-      </div>
-      <div class="chat-header" id="chatHeader" style="display: none;">
-        <img src="" class="chat-avatar" id="activeChatAvatar">
-        <div class="chat-header-info">
-          <div class="chat-header-name" id="activeChatName">...</div>
-          <div class="chat-header-status" id="activeChatStatus" style="font-size:12px; color:#888;">...</div>
-        </div>
-        <div class="chat-actions" id="groupManageAction" style="display:none;">
-          <button style="color:#00ff41; background:transparent; border:1px solid #00ff41; padding:5px 10px; border-radius:5px; cursor:pointer;" onclick="openManageGroup()">⚙️ إعدادات الجروب</button>
-        </div>
-      </div>
-      <div class="messages" id="messages" style="display: none;"></div>
-      <div class="input-area" id="inputArea" style="display: none;">
-        <input type="text" id="messageInput" placeholder="اكتب رسالتك هنا..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button class="send-btn" onclick="sendMessage()">📨</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const socket = io();
-    let currentUser = null, currentUsername = null, activeChat = null, activeTab = 'chats', searchResultUser = null;
-
-    function previewImage(fileInput, previewId) {
-      const file = fileInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) { document.getElementById(previewId).src = e.target.result; }
-        reader.readAsDataURL(file);
-      }
-    }
-
-    // تم إصلاح الدالة لمنع ظهور الرسالة كـ "رد تلقائي" أو تكرارها عند نفس المرسل
-    socket.on('receive-message', (data) => {
-      if (activeChat && activeChat.id === data.toId && activeChat.type === data.type) {
-        let direction = (data.fromId === currentUser.id) ? 'sent' : 'received';
-        appendMessage(data.fromName, data.message, direction);
-      } else {
-        if (data.fromId !== currentUser.id) {
-          showNotification(`📩 رسالة جديدة في ${data.fromName}`);
-        }
-      }
-    });
-
-    socket.on('group-updated', (updatedGroup) => {
-      if (activeChat && activeChat.type === 'group' && activeChat.id === updatedGroup.id) {
-        activeChat.group = updatedGroup;
-        document.getElementById('activeChatName').textContent = updatedGroup.name;
-        document.getElementById('activeChatStatus').textContent = updatedGroup.description;
-        document.getElementById('activeChatAvatar').src = updatedGroup.avatar;
-        if(document.getElementById('manageGroupModal').classList.contains('active')) {
-            renderGroupMembers();
-        }
-      }
-      if (activeTab === 'groups') loadChats();
-    });
-
-    socket.on('user-kicked-global', (data) => {
-        if (currentUser.id === data.targetId) {
-            showNotification('⚠️ تم طردك من هذه المجموعة!');
-            if (activeChat && activeChat.id === data.groupId) {
-                activeChat = null;
-                document.getElementById('chatHeader').style.display = 'none';
-                document.getElementById('messages').style.display = 'none';
-                document.getElementById('inputArea').style.display = 'none';
-                document.getElementById('emptyState').style.display = 'flex';
-            }
-            loadChats();
-        }
-    });
-
-    function showNotification(text) {
-      let notif = document.getElementById('notification');
-      document.getElementById('notifText').textContent = text;
-      notif.style.display = 'block';
-      setTimeout(() => notif.style.display = 'none', 3000);
-    }
-
-    function openModal(id) {
-      if(id === 'addFriendModal') {
-        document.getElementById('friendIdInput').value = '';
-        document.getElementById('searchResult').style.display = 'none';
-      }
-      document.getElementById(id).classList.add('active');
-    }
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-    async function login() {
-      let username = document.getElementById('loginUser').value.trim();
-      let password = document.getElementById('loginPass').value;
-      let res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-      let data = await res.json();
-      if (data.success) {
-        currentUser = data.user; currentUsername = data.username;
-        showApp();
-      } else { alert(data.error); }
-    }
-
-    async function register() {
-      let username = document.getElementById('regUsername').value.trim();
-      let name = document.getElementById('regName').value.trim();
-      let pass = document.getElementById('regPass').value;
-      if (pass !== document.getElementById('regPass2').value) return alert('كلمة المرور غير متطابقة');
-      let res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password: pass, name }) });
-      let data = await res.json();
-      if (data.success) {
-        currentUser = data.user; currentUsername = username;
-        showApp();
-      } else { alert(data.error); }
-    }
-
-    function showRegister() { document.getElementById('loginScreen').style.display='none'; document.getElementById('registerScreen').style.display='flex'; }
-    function showLogin() { document.getElementById('loginScreen').style.display='flex'; document.getElementById('registerScreen').style.display='none'; }
-
-    function showApp() {
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('registerScreen').style.display = 'none';
-      document.getElementById('app').classList.add('active');
-      
-      document.getElementById('sidebarName').textContent = currentUser.name;
-      document.getElementById('sidebarId').textContent = 'ID: ' + currentUser.id;
-      document.getElementById('sidebarAvatar').src = currentUser.avatar;
-
-      socket.emit('join', currentUser.id);
-      loadChats();
-    }
-
-    function switchTab(tab) {
-      activeTab = tab;
-      document.getElementById('tab-chats').classList.remove('active');
-      document.getElementById('tab-groups').classList.remove('active');
-      document.getElementById(`tab-${tab}`).classList.add('active');
-      loadChats();
-    }
-
-    async function loadChats() {
-      let list = document.getElementById('chatList');
-      list.innerHTML = '';
-      
-      if (activeTab === 'chats') {
-        if (currentUser.friends && currentUser.friends.length > 0) {
-          for (let fId of currentUser.friends) {
-            let r = await fetch('/api/user/' + encodeURIComponent(fId));
-            let d = await r.json();
-            if (d.success) {
-              list.innerHTML += `<div class="chat-item" onclick="openPrivateChat('${d.user.id}', '${d.user.name}', '${d.user.avatar}')">
-                <img src="${d.user.avatar}" class="chat-avatar">
-                <div class="chat-info"><div class="chat-name">${d.user.name}</div><div class="chat-preview">انقر لبدء المحادثة</div></div>
-              </div>`;
-            }
-          }
-        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">لا يوجد أصدقاء بعد.</div>'; }
-      } else {
-        let r = await fetch('/api/user-groups/' + currentUser.id);
-        let d = await r.json();
-        if (d.success && d.groups.length > 0) {
-          d.groups.forEach(g => {
-            list.innerHTML += `<div class="chat-item" onclick="openGroupChat('${g.id}')">
-              <img src="${g.avatar}" class="chat-avatar">
-              <div class="chat-info"><div class="chat-name">${g.name}</div><div class="chat-preview">${g.description}</div></div>
-            </div>`;
-          });
-        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">لم تشترك في أي جروب بعد.</div>'; }
-      }
-    }
-
-    function openPrivateChat(id, name, avatar) {
-      activeChat = { id, type: 'private', name, avatar, toId: id };
-      setupChatWindow(name, `المعرف: ${id}`, avatar, false);
-    }
-
-    async function openGroupChat(groupId) {
-      let r = await fetch('/api/user-groups/' + currentUser.id);
-      let d = await r.json();
-      if (!d.success) return;
-      let group = d.groups.find(g => g.id === groupId);
-      if (!group) return;
-
-      activeChat = { id: groupId, type: 'group', group, toId: groupId };
-      setupChatWindow(group.name, group.description, group.avatar, true);
-    }
-
-    function setupChatWindow(title, status, avatar, isGroup) {
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('chatHeader').style.display = 'flex';
-      document.getElementById('messages').style.display = 'flex';
-      document.getElementById('inputArea').style.display = 'flex';
-      
-      document.getElementById('activeChatName').textContent = title;
-      document.getElementById('activeChatStatus').textContent = status;
-      document.getElementById('activeChatAvatar').src = avatar;
-      document.getElementById('messages').innerHTML = '';
-      
-      document.getElementById('groupManageAction').style.display = isGroup ? 'block' : 'none';
-    }
-
-    // تعديل لمنع التكرار الفوري، الاعتماد الكامل على حدث الاستقبال من الـ Socket
-    function sendMessage() {
-      let input = document.getElementById('messageInput');
-      let text = input.value.trim();
-      if (!text || !activeChat) return;
-
-      socket.emit('send-message', {
-        toId: activeChat.toId,
-        message: text,
-        fromId: currentUser.id,
-        fromName: currentUser.name,
-        type: activeChat.type
-      });
-      input.value = '';
-    }
-
-    function appendMessage(author, text, dir) {
-      let box = document.getElementById('messages');
-      let msg = document.createElement('div');
-      msg.className = `message ${dir}`;
-      let time = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});
-      
-      if (activeChat.type === 'group' && dir === 'received') {
-        msg.innerHTML = `<div class="message-author">${author}</div>${text}<div class="message-time">${time}</div>`;
-      } else {
-        msg.innerHTML = `${text}<div class="message-time">${time}</div>`;
-      }
-      box.appendChild(msg);
-      box.scrollTop = box.scrollHeight;
-    }
-
-    async function searchFriend() {
-      let query = document.getElementById('friendIdInput').value.trim();
-      if (!query) return alert('يرجى إدخال بيانات البحث أولاً');
-      let res = await fetch('/api/user/' + encodeURIComponent(query));
-      let data = await res.json();
-      if (data.success) {
-        if(data.user.id === currentUser.id) return alert('مش هينفع تضيف نفسك!');
-        searchResultUser = data.user;
-        document.getElementById('searchAvatar').src = data.user.avatar;
-        document.getElementById('searchName').textContent = data.user.name;
-        document.getElementById('searchId').textContent = 'ID: ' + data.user.id;
-        document.getElementById('searchResult').style.display = 'flex';
-      } else { alert(data.error); }
-    }
-
-    async function addFriend() {
-      let res = await fetch('/api/add-friend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ myUsername: currentUsername, friendId: searchResultUser.id })
-      });
-      let data = await res.json();
-      if (data.success) {
-        currentUser = data.updatedUser;
-        loadChats();
-        closeModal('addFriendModal');
-        showNotification('✅ تمت إضافة الصديق بنجاح');
-      }
-    }
-
-    async function submitCreateGroup() {
-      let name = document.getElementById('groupNameInput').value.trim();
-      let description = document.getElementById('groupDescInput').value.trim();
-      let avatar = document.getElementById('groupCreateImgPreview').src;
-      if(!name) return alert('يرجى كتابة اسم المجموعة');
-
-      let res = await fetch('/api/groups/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description, avatar, creatorId: currentUser.id, creatorUsername: currentUsername })
-      });
-      let data = await res.json();
-      if(data.success) {
-        socket.emit('join-group-room', data.group.id);
-        closeModal('createGroupModal');
+    .member-list { margin-top: 15px; border-top: 1px solid #222; padding-top: 15px; }  
+    .member-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #222; }  
+    .member-item img { width: 35px; height: 35px; border-radius: 50%; }  
+    .member-info { flex: 1; }  
+    .member-role { font-size: 11px; color: #00ff41; background: #1a2f1a; padding: 2px 6px; border-radius: 4px; }  
+    .m-actions { display: flex; gap: 5px; }  
+    .m-btn { font-size: 11px; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;}  
+    .m-btn.kick { background: #ff3333; color: #fff; }  
+    .m-btn.promote { background: #00ff41; color: #000; }  
+  
+    .notification { display: none; position: fixed; top: 20px; left: 20px; background: #00ff41; color: #000; padding: 15px 25px; border-radius: 10px; font-weight: bold; box-shadow: 0 0 15px rgba(0,255,65,0.5); z-index: 2000; }  
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }  
+  
+    @media (max-width: 768px) {  
+      .sidebar { width: 100%; display: flex; }  
+      .chat-area { display: none; width: 100%; position: absolute; top:0; left:0; z-index: 10; }  
+      .app.chat-open .sidebar { display: none; }  
+      .app.chat-open .chat-area { display: flex; }  
+      .back-btn { display: block; }  
+    }  
+  </style>  
+</head>  
+<body>      
+  <div class="notification" id="notification"><span id="notifText">رسالة جديدة!</span></div>      
+    
+  <div class="auth-screen" id="loginScreen">  
+    <div class="auth-box">  
+      <h2>🔐 تسجيل الدخول</h2>  
+      <input type="text" id="loginUser" placeholder="اسم المستخدم أو الـ ID">  
+      <input type="password" id="loginPass" placeholder="كلمة المرور">  
+      <button onclick="login()">دخول</button>  
+      <div class="auth-toggle">ليس لديك حساب؟ <span onclick="showRegister()">سجل الآن</span></div>  
+    </div>  
+  </div>      
+  
+  <div class="auth-screen" id="registerScreen" style="display: none;">  
+    <div class="auth-box">  
+      <h2>📝 إنشاء حساب</h2>  
+      <input type="text" id="regUsername" placeholder="اسم المستخدم (بالإنجليزي)">  
+      <input type="text" id="regName" placeholder="الاسم المستعار">  
+      <input type="password" id="regPass" placeholder="كلمة المرور">  
+      <input type="password" id="regPass2" placeholder="تأكيد كلمة المرور">  
+      <button onclick="register()">تسجيل</button>  
+      <div class="auth-toggle">لديك حساب بالفعل؟ <span onclick="showLogin()">سجل دخول</span></div>  
+    </div>  
+  </div>      
+  
+  <div class="modal" id="addFriendModal">  
+    <div class="modal-box">  
+      <h3>➕ إضافة صديق</h3>  
+      <div class="setting-item">  
+        <label>🔍 أدخل الـ ID (أرقام فقط)</label>  
+        <input type="text" id="friendIdInput" placeholder="مثال: 89122">  
+      </div>  
+      <button class="modal-btn" onclick="searchFriend()">🔍 بحث</button>  
+      <div id="searchResult" style="display:none; align-items:center; gap:15px; margin:15px 0; background:#000; padding:10px; border-radius:8px;">  
+        <img id="searchAvatar" src="" class="chat-avatar">  
+        <div style="flex:1;"><div id="searchName" style="font-weight:bold;"></div><div id="searchId" style="color:#888;font-size:12px;"></div></div>  
+        <button class="modal-btn" style="width:auto; padding:5px 15px; margin:0;" onclick="addFriend()">إضافة</button>  
+      </div>  
+      <button class="modal-btn secondary" onclick="closeModal('addFriendModal')">إلغاء</button>  
+    </div>  
+  </div>      
+  
+  <div class="modal" id="createGroupModal">  
+    <div class="modal-box">  
+      <h3>👥 إنشاء مجموعة جديدة</h3>  
+      <div class="upload-preview">  
+        <img id="groupCreateImgPreview" src="https://cdn-icons-png.flaticon.com/512/32/32441.png">  
+        <label class="file-label">  
+          📸 اختر صورة المجموعة من جهازك  
+          <input type="file" id="groupCreateFile" accept="image/*" style="display:none;" onchange="previewImage(this, 'groupCreateImgPreview')">  
+        </label>  
+      </div>  
+      <div class="setting-item"><label>اسم المجموعة</label><input type="text" id="groupNameInput" placeholder="اسم الجروب"></div>  
+      <div class="setting-item"><label>وصف المجموعة</label><input type="text" id="groupDescInput" placeholder="اكتب نبذة عن المجموعة"></div>  
+      <button class="modal-btn" onclick="submitCreateGroup()">🚀 إنشاء الجروب</button>  
+      <button class="modal-btn secondary" onclick="closeModal('createGroupModal')">إلغاء</button>  
+    </div>  
+  </div>      
+  
+  <div class="modal" id="settingsModal">  
+    <div class="modal-box">  
+      <h3>⚙️ الإعدادات الشخصية</h3>  
+      <div class="upload-preview">  
+        <img id="profileImgPreview" src="">  
+        <label class="file-label">  
+          📸 اختر صورتك الشخصية  
+          <input type="file" id="profileFile" accept="image/*" style="display:none;" onchange="previewImage(this, 'profileImgPreview')">  
+        </label>  
+      </div>  
+      <div class="setting-item"><label>الاسم المستعار الجديد</label><input type="text" id="settingsName"></div>  
+      <button class="modal-btn" onclick="saveSettings()">💾 حفظ التعديلات</button>  
+      <button class="modal-btn secondary" onclick="closeModal('settingsModal')">إلغاء</button>  
+    </div>  
+  </div>      
+  
+  <div class="modal" id="groupSettingsModal">  
+    <div class="modal-box">  
+      <h3>⚙️ إدارة وإعدادات المجموعة</h3>  
+      <div id="groupAdminSection" style="display: none;">  
+        <div class="upload-preview">  
+          <img id="groupEditImgPreview" src="">  
+          <label class="file-label">  
+            📸 تعديل صورة المجموعة  
+            <input type="file" id="groupEditFile" accept="image/*" style="display:none;" onchange="previewImage(this, 'groupEditImgPreview')">  
+          </label>  
+        </div>  
+        <div class="setting-item"><label>اسم المجموعة الجديد</label><input type="text" id="groupSettingsName"></div>  
+        <div class="setting-item"><label>الوصف الجديد</label><input type="text" id="groupSettingsDesc"></div>  
+        <button class="modal-btn" onclick="saveGroupSettings()">💾 حفظ تعديلات الجروب</button>  
+      </div>  
+      <p id="groupNotAdminNotice" style="color: #888; text-align: center; display: none;">⚠️ تعديل البيانات متاح للمالك والمشرفين فقط.</p>  
         
-        if(!currentUser.groups) currentUser.groups = [];
-        currentUser.groups.push(data.group.id);
+      <div class="member-list">  
+        <h4>👥 أعضاء المجموعة:</h4>  
+        <div id="groupMembersContainer"></div>  
+      </div>  
+      <button class="modal-btn secondary" style="margin-top:20px;" onclick="closeModal('groupSettingsModal')">إغلاق</button>  
+    </div>  
+  </div>  
+  
+  <div class="app" id="app">  
+    <div class="sidebar">  
+      <div class="sidebar-header">  
+        <div class="user-info">  
+          <img src="" class="user-avatar" id="sidebarAvatar">  
+          <div class="user-details"><h3 id="sidebarName">...</h3><div class="user-id" id="sidebarId">ID: 00000</div></div>  
+        </div>  
+      </div>  
+      <div class="tabs">  
+        <div class="tab active" id="tab-chats" onclick="switchTab('chats')">💬 محادثات</div>  
+        <div class="tab" id="tab-groups" onclick="switchTab('groups')">👥 جروبات</div>  
+      </div>  
+      <div class="action-buttons">  
+        <button class="action-btn" onclick="openModal('addFriendModal')">➕ صديق</button>  
+        <button class="action-btn secondary" onclick="openModal('createGroupModal')">👥 جروب</button>  
+      </div>  
+      <div class="chat-list" id="chatList"></div>  
+      <button class="settings-btn" onclick="openSettings()">⚙️ الإعدادات الشَخصية</button>  
+    </div>  
+  
+    <div class="chat-area">  
+      <div class="empty-state" id="emptyState">  
+        <div style="font-size: 80px;">🚀</div><p style="color:#666;">اختر صديق أو جروب لبدء الشات</p>  
+      </div>  
+      <div class="chat-header" id="chatHeader" style="display: none;">  
+        <button class="back-btn" onclick="closeChatPage()">🔙</button>  
+        <img src="" class="chat-avatar" id="activeChatAvatar">  
+        <div class="chat-header-info">  
+          <div class="chat-header-name" id="activeChatName">...</div>  
+          <div class="chat-header-status" id="activeChatStatus" style="font-size:12px; color:#888;">...</div>  
+        </div>  
+        <div class="group-settings-icon" id="groupSettingsBtn" onclick="openGroupSettings()">⚙️</div>  
+      </div>  
         
-        switchTab('groups'); 
-        showNotification('👥 تم إنشاء المجموعة بنجاح!');
-        setTimeout(() => { openGroupChat(data.group.id); }, 300);
-      }
-    }
-
-    function openManageGroup() {
-      if(!activeChat || activeChat.type !== 'group') return;
-      let g = activeChat.group;
-      document.getElementById('manageGroupName').value = g.name;
-      document.getElementById('manageGroupDesc').value = g.description;
-      document.getElementById('groupManageImgPreview').src = g.avatar;
+      <div class="messages" id="messages" style="display: none;"></div>  
+        
+      <div class="input-area" id="inputArea" style="display: none;">  
+        <button class="input-btn" onclick="triggerAttachment()">📎</button>  
+        <input type="file" id="mediaAttachment" style="display:none;" accept="image/*,video/*" onchange="sendMediaFile(this)">  
+        <button class="input-btn" id="voiceBtn" onclick="toggleVoiceRecord()">🎤</button>  
+          
+        <input type="text" id="messageInput" placeholder="اكتب رسالتك هنا..." onkeypress="if(event.key==='Enter')sendMessage()">  
+        <button class="send-btn" onclick="sendMessage()">📨</button>  
+      </div>  
+    </div>  
+  </div>      
+  
+  <script>  
+    const socket = io();  
+    let currentUser = null, currentUsername = null, activeChat = null, activeTab = 'chats', searchResultUser = null;  
+    let mediaRecorder = null, audioChunks = [];  
+  
+    function previewImage(fileInput, previewId) {  
+      const file = fileInput.files[0];  
+      if (file) {  
+        const reader = new FileReader();  
+        reader.onload = function(e) { document.getElementById(previewId).src = e.target.result; }  
+        reader.readAsDataURL(file);  
+      }  
+    }  
+    
+    function openSettings() {  
+      if (!currentUser) return alert("يرجى تسجيل الدخول أولاً");  
+      document.getElementById('settingsName').value = currentUser.name;  
+      document.getElementById('profileImgPreview').src = currentUser.avatar;  
+      openModal('settingsModal');  
+    }  
+  
+    socket.on('receive-message', (data) => {  
+      if (activeChat && activeChat.id === data.toId && activeChat.type === data.type) {  
+        let direction = (data.fromId === currentUser.id) ? 'sent' : 'received';  
+        appendMessage(data.fromName, data.message, direction, data.fileType);  
+      } else {  
+        if (data.fromId !== currentUser.id) {  
+          showNotification(`📩 رسالة جديدة من ${data.fromName}`);  
+        }  
+      }  
+    });  
       
-      renderGroupMembers();
-      openModal('manageGroupModal');
-    }
-
-    async function renderGroupMembers() {
-        let res = await fetch(`/api/groups/${activeChat.id}/members`);
-        let data = await res.json();
-        let box = document.getElementById('groupMembersList');
-        box.innerHTML = '';
+    socket.on('group-updated', (data) => {  
+      if (activeChat && activeChat.type === 'group' && activeChat.id === data.groupId) {  
+         if (data.kickedId === currentUser.id) {  
+             alert('❌ لقد تم طردك من هذه المجموعة من قِبل الإدارة.');  
+             closeChatPage();  
+             loadChats();  
+         } else {  
+             document.getElementById('activeChatName').textContent = data.name;  
+             document.getElementById('activeChatAvatar').src = data.avatar;  
+         }  
+      }  
+    });  
+    
+    function showNotification(text) {  
+      let notif = document.getElementById('notification');  
+      document.getElementById('notifText').textContent = text;  
+      notif.style.display = 'block';  
+      setTimeout(() => notif.style.display = 'none', 3000);  
+    }  
+    
+    function openModal(id) { document.getElementById(id).classList.add('active'); }  
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }  
+    
+    async function login() {  
+      let username = document.getElementById('loginUser').value.trim();  
+      let password = document.getElementById('loginPass').value;  
+      let res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });  
+      let data = await res.json();  
+      if (data.success) {  
+        currentUser = data.user; currentUsername = data.username;  
+        showApp();  
+      } else { alert(data.error); }  
+    }  
+    
+    async function register() {  
+      let username = document.getElementById('regUsername').value.trim();  
+      let name = document.getElementById('regName').value.trim();  
+      let pass = document.getElementById('regPass').value;  
+      if (pass !== document.getElementById('regPass2').value) return alert('كلمة المرور غير متطابقة');  
+      let res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password: pass, name }) });  
+      let data = await res.json();  
+      if (data.success) {  
+        currentUser = data.user; currentUsername = username;  
+        showApp();  
+      } else { alert(data.error); }  
+    }  
+    
+    function showRegister() { document.getElementById('loginScreen').style.display='none'; document.getElementById('registerScreen').style.display='flex'; }  
+    function showLogin() { document.getElementById('loginScreen').style.display='flex'; document.getElementById('registerScreen').style.display='none'; }  
+    
+    function showApp() {  
+      document.getElementById('loginScreen').style.display = 'none';  
+      document.getElementById('registerScreen').style.display = 'none';  
+      document.getElementById('app').classList.add('active');  
+          
+      document.getElementById('sidebarName').textContent = currentUser.name;  
+      document.getElementById('sidebarId').textContent = 'ID: ' + currentUser.id;  
+      document.getElementById('sidebarAvatar').src = currentUser.avatar;  
+    
+      socket.emit('join', currentUser.id);  
+      loadChats();  
+    }  
+    
+    function switchTab(tab) {  
+      activeTab = tab;  
+      document.getElementById('tab-chats').classList.remove('active');  
+      document.getElementById('tab-groups').classList.remove('active');  
+      document.getElementById(`tab-${tab}`).classList.add('active');  
+      loadChats();  
+    }  
+    
+    async function loadChats() {  
+      let list = document.getElementById('chatList');  
+      list.innerHTML = '';  
+          
+      if (activeTab === 'chats') {  
+        if (currentUser.friends && currentUser.friends.length > 0) {  
+          for (let fId of currentUser.friends) {  
+            let r = await fetch('/api/user/' + encodeURIComponent(fId));  
+            let d = await r.json();  
+            if (d.success) {  
+              list.innerHTML += `<div class="chat-item" onclick="openPrivateChat('${d.user.id}', '${d.user.name}', '${d.user.avatar}')">  
+                <img src="${d.user.avatar}" class="chat-avatar">  
+                <div class="chat-info"><div class="chat-name">${d.user.name}</div><div class="chat-preview">انقر لفتح المحادثة</div></div>  
+              </div>`;  
+            }  
+          }  
+        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">لا يوجد أصدقاء بعد.</div>'; }  
+      } else {  
+        let r = await fetch('/api/user-groups/' + currentUser.id);  
+        let d = await r.json();  
+        if (d.success && d.groups.length > 0) {  
+          d.groups.forEach(g => {  
+            list.innerHTML += `<div class="chat-item" onclick="openGroupChat('${g.id}')">  
+              <img src="${g.avatar}" class="chat-avatar">  
+              <div class="chat-info"><div class="chat-name">${g.name}</div><div class="chat-preview">${g.description}</div></div>  
+            </div>`;  
+          });  
+        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">لم تشترك في أي جروب بعد.</div>'; }  
+      }  
+    }  
+    
+    async function openPrivateChat(id, name, avatar) {  
+      activeChat = { id, type: 'private', name, avatar, toId: id };  
+      document.getElementById('groupSettingsBtn').style.display = 'none';  
+      setupChatWindow(name, `المعرف: ${id}`, avatar);  
         
-        if(data.success) {
-            const isCreator = data.creator === currentUser.id;
-            const isAdmin = data.admins.includes(currentUser.id);
-
-            data.members.forEach(m => {
-                let actionButtons = '';
-                if(m.id !== currentUser.id) {
-                    if(isCreator) {
-                        const isAdminText = data.admins.includes(m.id) ? 'سحب إشراف' : 'تعيين مشرف';
-                        actionButtons += `<button class="member-btn admin-toggle" onclick="toggleAdmin('${m.id}')">${isAdminText}</button>`;
-                        actionButtons += `<button class="member-btn" onclick="kickMember('${m.id}')">طرد</button>`;
-                    } 
-                    else if(isAdmin && m.id !== data.creator && !data.admins.includes(m.id)) {
-                        actionButtons += `<button class="member-btn" onclick="kickMember('${m.id}')">طرد</button>`;
-                    }
-                }
-
-                box.innerHTML += `<div class="member-item">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${m.avatar}" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
-                        <div>
-                            <div style="font-weight:bold; font-size:14px;">${m.name}</div>
-                            <div style="font-size:11px; color:#888;">${m.role}</div>
-                        </div>
-                    </div>
-                    <div>${actionButtons}</div>
-                </div>`;
-            });
-        }
-    }
-
-    async function toggleAdmin(targetId) {
-        let res = await fetch('/api/groups/toggle-admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId: activeChat.id, targetId, myId: currentUser.id })
-        });
-        let data = await res.json();
-        if(data.success) showNotification('⚙️ تم تحديث رتبة العضو');
-        else alert(data.error);
-    }
-
-    async function kickMember(targetId) {
-        if(!confirm('هل أنت متأكد من طرد هذا العضو نهائياً؟')) return;
-        let res = await fetch('/api/groups/kick-member', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId: activeChat.id, targetId, myId: currentUser.id })
-        });
-        let data = await res.json();
-        if(data.success) showNotification('❌ تم طرد العضو بنجاح');
-        else alert(data.error);
-    }
-
-    async function submitUpdateGroup() {
-      let name = document.getElementById('manageGroupName').value.trim();
-      let description = document.getElementById('manageGroupDesc').value.trim();
-      let avatar = document.getElementById('groupManageImgPreview').src;
-
-      let res = await fetch('/api/groups/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: activeChat.id, name, description, avatar })
-      });
-      let data = await res.json();
-      if (data.success) { closeModal('manageGroupModal'); showNotification('⚙️ تم تحديث بيانات الجروب'); }
-    }
-
-    async function submitAddMemberToGroup() {
-      let memberInput = document.getElementById('groupMemberIdInput').value.trim();
-      if(!memberInput) return alert('ادخل الـ ID أولاً');
-
-      let searchRes = await fetch('/api/user/' + encodeURIComponent(memberInput));
-      let searchData = await searchRes.json();
-      if(!searchData.success) return alert('لا يوجد مستخدم بهذا الـ ID');
-
-      let res = await fetch('/api/groups/add-member', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: activeChat.id, memberId: searchData.user.id })
-      });
-      let data = await res.json();
-      if(data.success) {
-        showNotification('✅ تم إضافة العضو للمجموعة فوراً!');
-        document.getElementById('groupMemberIdInput').value = '';
-        renderGroupMembers();
-      } else { alert(data.error); }
-    }
-
-    function openSettings() {
-      document.getElementById('settingsName').value = currentUser.name;
-      document.getElementById('profileImgPreview').src = currentUser.avatar;
-      openModal('settingsModal');
-    }
-
-    async function saveSettings() {
-      let name = document.getElementById('settingsName').value.trim();
-      let avatar = document.getElementById('profileImgPreview').src;
-      let res = await fetch('/api/update-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: currentUsername, name, avatar })
-      });
-      let data = await res.json();
-      if(data.success) { currentUser = data.user; showApp(); closeModal('settingsModal'); }
-    }
-
-    window.onload = function() {
-      localStorage.clear(); // مسح الـ localStorage لضمان تنظيف الكاش وحل الكراش تماماً
-    };
-  </script>
-</body>
+      let res = await fetch(`/api/messages?fromId=${currentUser.id}&toId=${id}&type=private`);  
+      let data = await res.json();  
+      if(data.success) {  
+        data.history.forEach(msg => {  
+          let direction = (msg.fromId === currentUser.id) ? 'sent' : 'received';  
+          appendMessage(msg.fromName, msg.message, direction, msg.fileType);  
+        });  
+      }  
+    }  
+    
+    async function openGroupChat(groupId) {  
+      let r = await fetch('/api/user-groups/' + currentUser.id);  
+      let d = await r.json();  
+      if (!d.success) return;  
+      let group = d.groups.find(g => g.id === groupId);  
+      if (!group) return;  
+    
+      activeChat = { id: groupId, type: 'group', group, toId: groupId };  
+      document.getElementById('groupSettingsBtn').style.display = 'block';  
+      setupChatWindow(group.name, group.description, group.avatar);  
+        
+      let res = await fetch(`/api/messages?fromId=${currentUser.id}&toId=${groupId}&type=group`);  
+      let data = await res.json();  
+      if(data.success) {  
+        data.history.forEach(msg => {  
+          let direction = (msg.fromId === currentUser.id) ? 'sent' : 'received';  
+          appendMessage(msg.fromName, msg.message, direction, msg.fileType);  
+        });  
+      }  
+    }  
+    
+    function setupChatWindow(title, status, avatar) {  
+      document.getElementById('emptyState').style.display = 'none';  
+      document.getElementById('chatHeader').style.display = 'flex';  
+      document.getElementById('messages').style.display = 'flex';  
+      document.getElementById('inputArea').style.display = 'flex';  
+          
+      document.getElementById('activeChatName').textContent = title;  
+      document.getElementById('activeChatStatus').textContent = status;  
+      document.getElementById('activeChatAvatar').src = avatar;  
+      document.getElementById('messages').innerHTML = '';  
+        
+      document.getElementById('app').classList.add('chat-open');  
+    }  
+    
+    function closeChatPage() {  
+      document.getElementById('app').classList.remove('chat-open');  
+      activeChat = null;  
+    }  
+  
+    async function openGroupSettings() {  
+       if (!activeChat || activeChat.type !== 'group') return;  
+         
+       let res = await fetch(`/api/groups/details/${activeChat.id}`);  
+       let data = await res.json();  
+       if (!data.success) return alert('فشل جلب بيانات الجروب');  
+         
+       let group = data.group;  
+       let myRole = data.membersInfo.find(m => m.id === currentUser.id)?.role;  
+         
+       if(myRole === 'owner' || myRole === 'admin') {  
+           document.getElementById('groupAdminSection').style.display = 'block';  
+           document.getElementById('groupNotAdminNotice').style.display = 'none';  
+           document.getElementById('groupSettingsName').value = group.name;  
+           document.getElementById('groupSettingsDesc').value = group.description;  
+           document.getElementById('groupEditImgPreview').src = group.avatar;  
+       } else {  
+           document.getElementById('groupAdminSection').style.display = 'none';  
+           document.getElementById('groupNotAdminNotice').style.display = 'block';  
+       }  
+         
+       let container = document.getElementById('groupMembersContainer');  
+       container.innerHTML = '';  
+         
+       data.membersInfo.forEach(m => {  
+           let roleBadge = m.role === 'owner' ? '👑 مالك' : (m.role === 'admin' ? '⭐ مشرف' : '👤 عضو');  
+           let actionButtons = '';  
+             
+           if (m.id !== currentUser.id) {  
+               if (myRole === 'owner') {  
+                   if (m.role !== 'admin') {  
+                       actionButtons += `<button class="m-btn promote" onclick="changeMemberRole('${group.id}', '${m.id}', 'admin')">ترقية مشرف</button>`;  
+                   } else {  
+                       actionButtons += `<button class="m-btn promote" style="background:#ffaa00;" onclick="changeMemberRole('${group.id}', '${m.id}', 'member')">تنزيل لعضو</button>`;  
+                   }  
+                   actionButtons += `<button class="m-btn kick" onclick="kickMember('${group.id}', '${m.id}')">طرد</button>`;  
+               } else if (myRole === 'admin' && m.role === 'member') {  
+                   actionButtons += `<button class="m-btn kick" onclick="kickMember('${group.id}', '${m.id}')">طرد</button>`;  
+               }  
+           }  
+             
+           container.innerHTML += `  
+             <div class="member-item">  
+                <img src="${m.avatar}">  
+                <div class="member-info">  
+                   <div>${m.name}</div>  
+                   <span class="member-role">${roleBadge}</span>  
+                </div>  
+                <div class="m-actions">${actionButtons}</div>  
+             </div>  
+           `;  
+       });  
+         
+       openModal('groupSettingsModal');  
+    }  
+  
+    async function saveGroupSettings() {  
+        let name = document.getElementById('groupSettingsName').value.trim();  
+        let desc = document.getElementById('groupSettingsDesc').value.trim();  
+        let avatar = document.getElementById('groupEditImgPreview').src;  
+        if(!name) return alert('اسم المجموعة مطلوب');  
+  
+        let res = await fetch('/api/groups/update', {  
+            method: 'POST',  
+            headers: { 'Content-Type': 'application/json' },  
+            body: JSON.stringify({ groupId: activeChat.id, name, description: desc, avatar, userId: currentUser.id })  
+        });  
+        let data = await res.json();  
+        if(data.success) {  
+            showNotification('⚙️ تم تحديث بيانات المجموعة بنجاح');  
+            closeModal('groupSettingsModal');  
+            openGroupChat(activeChat.id);  
+        } else { alert(data.error); }  
+    }  
+  
+    async function changeMemberRole(groupId, targetUserId, newRole) {  
+        let res = await fetch('/api/groups/change-role', {  
+            method: 'POST',  
+            headers: { 'Content-Type': 'application/json' },  
+            body: JSON.stringify({ groupId, targetUserId, newRole, requestUserId: currentUser.id })  
+        });  
+        let data = await res.json();  
+        if(data.success) {  
+            showNotification('⭐ تم تعديل رتبة العضو');  
+            openGroupSettings();  
+        } else { alert(data.error); }  
+    }  
+  
+    async function kickMember(groupId, targetUserId) {  
+        if(!confirm('هل أنت متأكد من طرد هذا العضو؟')) return;  
+        let res = await fetch('/api/groups/kick', {  
+            method: 'POST',  
+            headers: { 'Content-Type': 'application/json' },  
+            body: JSON.stringify({ groupId, targetUserId, requestUserId: currentUser.id })  
+        });  
+        let data = await res.json();  
+        if(data.success) {  
+            showNotification('❌ تم طرد العضو بنجاح');  
+            openGroupSettings();  
+        } else { alert(data.error); }  
+    }  
+    
+    function sendMessage() {  
+      let input = document.getElementById('messageInput');  
+      let text = input.value.trim();  
+      if (!text || !activeChat) return;  
+    
+      let msgData = {  
+        toId: activeChat.toId,  
+        message: text,  
+        fromId: currentUser.id,  
+        fromName: currentUser.name,  
+        type: activeChat.type,  
+        fileType: 'text'  
+      };  
+      socket.emit('send-message', msgData);  
+      appendMessage(currentUser.name, text, 'sent', 'text');  
+      input.value = '';  
+    }  
+    
+    function appendMessage(author, text, dir, fileType = 'text') {  
+      let box = document.getElementById('messages');  
+      let msg = document.createElement('div');  
+      msg.className = `message ${dir}`;  
+      let time = new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});  
+          
+      let content = text;  
+      if (fileType === 'image') {  
+        content = `<img src="${text}">`;  
+      } else if (fileType === 'video') {  
+        content = `<video src="${text}" controls></video>`;  
+      } else if (fileType === 'audio') {  
+        content = `<audio src="${text}" controls></audio>`;  
+      }  
+    
+      if (activeChat.type === 'group' && dir === 'received') {  
+        msg.innerHTML = `<div class="message-author">${author}</div>${content}<div class="message-time">${time}</div>`;  
+      } else {  
+        msg.innerHTML = `${content}<div class="message-time">${time}</div>`;  
+      }  
+      box.appendChild(msg);  
+      box.scrollTop = box.scrollHeight;  
+    }  
+    
+    function triggerAttachment() { document.getElementById('mediaAttachment').click(); }  
+    
+    function sendMediaFile(input) {  
+      const file = input.files[0];  
+      if (!file || !activeChat) return;  
+      const reader = new FileReader();  
+      reader.onload = function(e) {  
+        let fType = file.type.startsWith('image/') ? 'image' : 'video';  
+        let msgData = { toId: activeChat.toId, message: e.target.result, fromId: currentUser.id, fromName: currentUser.name, type: activeChat.type, fileType: fType };  
+        socket.emit('send-message', msgData);  
+        appendMessage(currentUser.name, e.target.result, 'sent', fType);  
+      };  
+      reader.readAsDataURL(file);  
+      input.value = '';  
+    }  
+    
+    async function toggleVoiceRecord() {  
+      const btn = document.getElementById('voiceBtn');  
+      if (mediaRecorder && mediaRecorder.state === "recording") {  
+        mediaRecorder.stop();  
+        btn.classList.remove('recording');  
+        btn.innerText = '🎤';  
+        return;  
+      }  
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { return alert('متصفحك لا يدعم تسجيل الصوت'); }  
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  
+      audioChunks = [];  
+      mediaRecorder = new MediaRecorder(stream);  
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);  
+      mediaRecorder.onstop = () => {  
+        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });  
+        const reader = new FileReader();  
+        reader.onload = function(e) {  
+          let msgData = { toId: activeChat.toId, message: e.target.result, fromId: currentUser.id, fromName: currentUser.name, type: activeChat.type, fileType: 'audio' };  
+          socket.emit('send-message', msgData);  
+          appendMessage(currentUser.name, e.target.result, 'sent', 'audio');  
+        };  
+        reader.readAsDataURL(audioBlob);  
+        stream.getTracks().forEach(track => track.stop());  
+      };  
+      mediaRecorder.start();  
+      btn.classList.add('recording');  
+      btn.innerText = '🛑';  
+    }  
+    
+    async function searchFriend() {  
+      let query = document.getElementById('friendIdInput').value.trim();  
+      if (!query) return alert('يرجى إدخال بيانات البحث أولاً');  
+      let res = await fetch('/api/user/' + encodeURIComponent(query));  
+      let data = await res.json();  
+      if (data.success) {  
+        if(data.user.id === currentUser.id) return alert('لا يمكنك إضافة نفسك!');  
+        searchResultUser = data.user;  
+        document.getElementById('searchAvatar').src = data.user.avatar;  
+        document.getElementById('searchName').textContent = data.user.name;  
+        document.getElementById('searchId').textContent = 'ID: ' + data.user.id;  
+        document.getElementById('searchResult').style.display = 'flex';  
+      } else { alert(data.error); }  
+    }  
+    
+    async function addFriend() {  
+      let res = await fetch('/api/add-friend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ myUsername: currentUsername, friendId: searchResultUser.id }) });  
+      let data = await res.json();  
+      if (data.success) { currentUser = data.updatedUser; loadChats(); closeModal('addFriendModal'); showNotification('✅ تمت إضافة الصديق بنجاح'); }  
+    }  
+    
+    async function submitCreateGroup() {  
+      let name = document.getElementById('groupNameInput').value.trim();  
+      let description = document.getElementById('groupDescInput').value.trim();  
+      let avatar = document.getElementById('groupCreateImgPreview').src;  
+      if(!name) return alert('يرجى كتابة اسم المجموعة');  
+    
+      let res = await fetch('/api/groups/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description, avatar, creatorId: currentUser.id, creatorUsername: currentUsername }) });  
+      let data = await res.json();  
+      if(data.success) {  
+        closeModal('createGroupModal');  
+        if(!currentUser.groups) currentUser.groups = [];  
+        currentUser.groups.push(data.group.id);  
+        switchTab('groups');   
+        showNotification('👥 تم إنشاء المجموعة بنجاح!');  
+      }  
+    }  
+    
+    async function saveSettings() {  
+      let name = document.getElementById('settingsName').value.trim();  
+      let avatar = document.getElementById('profileImgPreview').src;  
+      if(!name) return alert("الاسم مطلوب");  
+    
+      let res = await fetch('/api/update-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: currentUsername, name: name, avatar: avatar }) });  
+      let data = await res.json();  
+      if(data.success) {   
+        currentUser = data.user;   
+        document.getElementById('sidebarName').textContent = currentUser.name;  
+        document.getElementById('sidebarAvatar').src = currentUser.avatar;  
+        closeModal('settingsModal');   
+        showNotification('⚙️ تم تعديل البيانات بنجاح');  
+      } else { alert("فشل تحديث البيانات الشخصية"); }   
+    }  
+    
+    window.onload = function() { localStorage.clear(); };  
+  </script>  
+</body>  
 </html>
 
